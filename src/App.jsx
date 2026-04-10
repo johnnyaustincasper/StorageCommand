@@ -8,29 +8,72 @@ const SIZES = [
   { key:"xl", label:"10×30", sqft:300, price:249, desc:"Commercial / multi-vehicle", features:["Drive-up","14ft ceiling","24/7","Forklift"] },
 ];
 const STATUS = {
-  available:{color:"#22c55e",label:"Available"},occupied:{color:"#ef4444",label:"Occupied"},
-  reserved:{color:"#3b82f6",label:"Reserved"},maintenance:{color:"#f59e0b",label:"Maintenance"},
+  available:{color:"#22c55e",label:"Available"},
+  occupied:{color:"#ef4444",label:"Occupied"},
+  reserved:{color:"#3b82f6",label:"Reserved"},
+  maintenance:{color:"#f59e0b",label:"Maintenance"},
   overdue:{color:"#dc2626",label:"Past Due"},
 };
-const TENANTS=[{name:"Sarah Mitchell",phone:"(918) 555-0142",email:"sarah.m@email.com",since:"2024-03-15"},{name:"James Rodriguez",phone:"(918) 555-0198",email:"james.r@email.com",since:"2024-06-01"},{name:"Emily Chen",phone:"(918) 555-0267",email:"emily.c@email.com",since:"2025-01-10"},{name:"Marcus Johnson",phone:"(918) 555-0334",email:"marcus.j@email.com",since:"2024-11-20"},{name:"Lisa Park",phone:"(918) 555-0411",email:"lisa.p@email.com",since:"2025-02-05"},{name:"David Kim",phone:"(918) 555-0523",email:"david.k@email.com",since:"2024-08-14"},{name:"Rachel Foster",phone:"(918) 555-0647",email:"rachel.f@email.com",since:"2024-05-22"},{name:"Tom Williams",phone:"(918) 555-0718",email:"tom.w@email.com",since:"2025-03-01"}];
+const TENANTS=[
+  {name:"Sarah Mitchell",phone:"(918) 555-0142",email:"sarah.m@email.com",since:"2024-03-15"},
+  {name:"James Rodriguez",phone:"(918) 555-0198",email:"james.r@email.com",since:"2024-06-01"},
+  {name:"Emily Chen",phone:"(918) 555-0267",email:"emily.c@email.com",since:"2025-01-10"},
+  {name:"Marcus Johnson",phone:"(918) 555-0334",email:"marcus.j@email.com",since:"2024-11-20"},
+  {name:"Lisa Park",phone:"(918) 555-0411",email:"lisa.p@email.com",since:"2025-02-05"},
+  {name:"David Kim",phone:"(918) 555-0523",email:"david.k@email.com",since:"2024-08-14"},
+  {name:"Rachel Foster",phone:"(918) 555-0647",email:"rachel.f@email.com",since:"2024-05-22"},
+  {name:"Tom Williams",phone:"(918) 555-0718",email:"tom.w@email.com",since:"2025-03-01"},
+];
 
 function genUnits(){
-  const u=[],sts=["available","available","available","occupied","occupied","occupied","occupied","reserved","maintenance","overdue"];
-  const dims={small:{w:1.1,h:0.9,d:1.3},medium:{w:1.6,h:1.1,d:1.8},large:{w:2.2,h:1.4,d:2.3},xl:{w:2.8,h:1.7,d:2.8}};
+  const u=[];
+  const sts=["available","available","available","occupied","occupied","occupied","occupied","reserved","maintenance","overdue"];
+  const dims={small:{w:1.4,h:0.7,d:1.4},medium:{w:1.4,h:1.1,d:1.4},large:{w:1.4,h:1.6,d:1.4},xl:{w:1.4,h:2.2,d:1.4}};
   const rZ=[{z:-6,f:1},{z:-2,f:-1},{z:4,f:1},{z:8,f:-1}];
   const rows=["A1","A2","B1","B2"];
-  const cfg=[["small","small","medium","medium","large","xl","medium","small","small"],["small","medium","medium","large","large","xl","medium","small","small"],["medium","large","xl","xl","large","medium","small","small","small"],["medium","large","xl","large","medium","medium","small","small","small"]];
+  const cfg=[
+    ["small","small","medium","medium","large","xl","medium","small","small"],
+    ["small","medium","medium","large","large","xl","medium","small","small"],
+    ["medium","large","xl","xl","large","medium","small","small","small"],
+    ["medium","large","xl","large","medium","medium","small","small","small"],
+  ];
   let ti=0;
-  rows.forEach((row,ri)=>{let x=-12;cfg[ri].forEach((type,i)=>{const d=dims[type];const s=SIZES.find(s=>s.key===type);const status=sts[Math.floor(Math.random()*sts.length)];const tenant=(status==="occupied"||status==="overdue")?TENANTS[ti++%TENANTS.length]:null;u.push({id:`${row}-${String(i+1).padStart(2,"0")}`,type,status,...s,w:d.w,h:d.h,d:d.d,tenant,balance:status==="overdue"?Math.floor(Math.random()*300)+80:0,x:x+d.w/2,y:0,z:rZ[ri].z+(rZ[ri].f*d.d)/2});x+=d.w+0.45;});});
+  // Use seeded-ish deterministic status based on index so it's stable
+  rows.forEach((row,ri)=>{
+    let x=-12;
+    cfg[ri].forEach((type,i)=>{
+      const d=dims[type];
+      const s=SIZES.find(s=>s.key===type);
+      const status=sts[(ri*9+i)%sts.length];
+      const tenant=(status==="occupied"||status==="overdue")?TENANTS[ti++%TENANTS.length]:null;
+      u.push({
+        id:`${row}-${String(i+1).padStart(2,"0")}`,
+        type,status,...s,
+        w:d.w,h:d.h,d:d.d,
+        tenant,
+        balance:status==="overdue"?Math.floor((ri*9+i)*37%300)+80:0,
+        x:x+d.w/2,y:0,
+        z:rZ[ri].z+(rZ[ri].f*d.d)/2,
+      });
+      x+=d.w+0.3;
+    });
+  });
   return u;
 }
+
 const ALL_UNITS=genUnits();
 const genCode=()=>Math.floor(1000+Math.random()*9000)+String.fromCharCode(65+Math.floor(Math.random()*26));
-const P={bg:"#fefefe",card:"#ffffff",border:"#f0ece4",borderLight:"#f7f4ef",text:"#1a1714",sub:"#8c8378",muted:"#b8afa5",gold:"#c9a84c",goldLight:"#f5eed9",goldDark:"#8b7432",blue:"#3b82f6",success:"#22c55e",danger:"#ef4444",font:"'Cormorant Garamond', serif",fontBody:"'Nunito', sans-serif",radius:12};
+const P={
+  bg:"#fefefe",card:"#ffffff",border:"#f0ece4",borderLight:"#f7f4ef",
+  text:"#1a1714",sub:"#8c8378",muted:"#b8afa5",
+  gold:"#c9a84c",goldLight:"#f5eed9",goldDark:"#8b7432",
+  blue:"#3b82f6",success:"#22c55e",danger:"#ef4444",
+  font:"'Cormorant Garamond', serif",fontBody:"'Nunito', sans-serif",radius:12,
+};
 const hx=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
 
 // ═══════════════════════════════════════════════
-// CANVAS 3D RENDERER + REACT EVENT OVERLAY
+// CANVAS 3D RENDERER
 // ═══════════════════════════════════════════════
 function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const canvasRef = useRef(null);
@@ -39,15 +82,11 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const targetRef = useRef({ angle:30, tiltX:-1.1, cx:0, cz:1, zoom:28 });
   const selRef = useRef(null);
   const filterRef = useRef(null);
-  const gestureRef = useRef({
-    active:false, type:null,
-    sx:0, sy:0, moved:false,
-    startCx:0, startCz:0,
-    startAngle:0, startRotAngle:0,
-    startDist:0, startZoom:0,
-    touches:[],
-  });
+  const gestureRef = useRef({ active:false, type:null, sx:0, sy:0, moved:false });
   const idleRef = useRef(0);
+  const ptrCache = useRef([]);
+  const lastPan = useRef({x:0,y:0});
+  const lastPinch = useRef({dist:0,angle:0,mx:0,my:0});
 
   useEffect(()=>{selRef.current=selId;},[selId]);
   useEffect(()=>{filterRef.current=statusFilter;},[statusFilter]);
@@ -69,43 +108,139 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
     const cb=Math.cos(c.tiltX),sb=Math.sin(c.tiltX);
     let ry=y*cb-rz*sb, rz2=y*sb+rz*cb;
     const sc=c.dist/(c.dist+rz2);
-    return{sx:c.scx+rx*sc*c.zm,sy:c.scy-ry*sc*c.zm,dp:rz2,sc};
+    return{sx:c.scx+rx*sc*c.zm, sy:c.scy-ry*sc*c.zm, dp:rz2, sc};
   },[]);
 
+  const applyPan=(dx,dy)=>{
+    const t=targetRef.current;
+    const c=camRef.current;
+    const scale=18/Math.max(c.zoom,10);
+    const ang=c.angle*Math.PI/180;
+    const ca=Math.cos(ang),sa=Math.sin(ang);
+    const worldX= dx*ca - dy*sa;
+    const worldZ=-dx*sa - dy*ca;
+    const mx=worldX*scale*0.035;
+    const mz=worldZ*scale*0.035;
+    c.cx-=mx; c.cz-=mz;
+    t.cx-=mx; t.cz-=mz;
+  };
+
+  const getTouchInfo=(touches)=>{
+    if(touches.length<2)return{dist:0,angle:0,mx:touches[0]?.clientX||0,my:touches[0]?.clientY||0};
+    const dx=touches[1].clientX-touches[0].clientX;
+    const dy=touches[1].clientY-touches[0].clientY;
+    return{dist:Math.sqrt(dx*dx+dy*dy),angle:Math.atan2(dy,dx),mx:(touches[0].clientX+touches[1].clientX)/2,my:(touches[0].clientY+touches[1].clientY)/2};
+  };
+
+  const hitTest=(cx,cy)=>{
+    const cv=canvasRef.current; if(!cv)return null;
+    const rect=cv.getBoundingClientRect();
+    const mx=cx-rect.left, my=cy-rect.top;
+    let best=null, bestD=Infinity;
+    projRef.current.forEach(({id,sx,sy,radius})=>{
+      const d=Math.sqrt((mx-sx)**2+(my-sy)**2);
+      if(d<radius*3&&d<bestD){bestD=d;best=id;}
+    });
+    return best;
+  };
+
+  const onPointerDown=(e)=>{
+    ptrCache.current=ptrCache.current.filter(p=>p.pointerId!==e.pointerId);
+    ptrCache.current.push({pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY});
+    const g=gestureRef.current;
+    g.moved=false; idleRef.current=0;
+    if(ptrCache.current.length===1){
+      g.active=true; g.type="pan";
+      lastPan.current={x:e.clientX,y:e.clientY};
+      g.sx=e.clientX; g.sy=e.clientY;
+    }else if(ptrCache.current.length>=2){
+      g.active=true; g.type="pinch"; g.moved=true;
+      const info=getTouchInfo(ptrCache.current);
+      lastPinch.current={dist:info.dist,angle:info.angle,mx:info.mx,my:info.my};
+    }
+  };
+
+  const onPointerMove=(e)=>{
+    ptrCache.current=ptrCache.current.map(p=>p.pointerId===e.pointerId?{pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY}:p);
+    const g=gestureRef.current;
+    if(!g.active)return;
+    if(g.type==="pan"&&ptrCache.current.length===1){
+      const dx=e.clientX-lastPan.current.x;
+      const dy=e.clientY-lastPan.current.y;
+      if(Math.abs(e.clientX-g.sx)>4||Math.abs(e.clientY-g.sy)>4)g.moved=true;
+      if(g.moved)applyPan(dx,dy);
+      lastPan.current={x:e.clientX,y:e.clientY};
+    }else if(g.type==="pinch"&&ptrCache.current.length>=2){
+      const info=getTouchInfo(ptrCache.current);
+      const lp=lastPinch.current;
+      if(lp.dist>0){const ratio=info.dist/lp.dist;targetRef.current.zoom=Math.max(15,Math.min(100,targetRef.current.zoom*ratio));}
+      let angleDelta=(info.angle-lp.angle)*180/Math.PI;
+      if(angleDelta>180)angleDelta-=360;
+      if(angleDelta<-180)angleDelta+=360;
+      angleDelta=Math.max(-10,Math.min(10,angleDelta));
+      targetRef.current.angle-=angleDelta;
+      applyPan(info.mx-lp.mx,info.my-lp.my);
+      lastPinch.current={dist:info.dist,angle:info.angle,mx:info.mx,my:info.my};
+    }
+  };
+
+  const onPointerUp=(e)=>{
+    ptrCache.current=ptrCache.current.filter(p=>p.pointerId!==e.pointerId);
+    const g=gestureRef.current;
+    if(ptrCache.current.length===0){
+      if(!g.moved){const id=hitTest(e.clientX,e.clientY);if(id)onSelect(id);}
+      g.active=false; g.type=null;
+    }else if(ptrCache.current.length===1){
+      const p=ptrCache.current[0]; g.type="pan"; lastPan.current={x:p.clientX,y:p.clientY};
+    }
+  };
+
+  const onPointerCancel=(e)=>{
+    ptrCache.current=ptrCache.current.filter(p=>p.pointerId!==e.pointerId);
+    if(ptrCache.current.length===0){gestureRef.current.active=false;gestureRef.current.type=null;}
+  };
+
+  const onWheel=(e)=>{
+    e.preventDefault(); idleRef.current=0;
+    const delta=e.deltaY>0?-3:3;
+    targetRef.current.zoom=Math.max(15,Math.min(100,targetRef.current.zoom+delta));
+  };
+
   useEffect(()=>{
-    const cv=canvasRef.current;if(!cv)return;
+    const cv=canvasRef.current; if(!cv)return;
     const ctx=cv.getContext("2d");
     let frame, last=performance.now();
+
     const render=(ts)=>{
-      const dt=Math.min(0.05,(ts-last)/1000);last=ts;
+      const dt=Math.min(0.05,(ts-last)/1000); last=ts;
       const t=ts*0.001;
-      const c=camRef.current,tg=targetRef.current;
+      const c=camRef.current, tg=targetRef.current;
 
       c.angle+=(tg.angle-c.angle)*0.05;
       c.tiltX+=(tg.tiltX-c.tiltX)*0.04;
-      c.cx+=(tg.cx-c.cx)*0.05;
-      c.cz+=(tg.cz-c.cz)*0.05;
+      c.cx+=(tg.cx-c.cx)*0.18;
+      c.cz+=(tg.cz-c.cz)*0.18;
       c.zoom+=(tg.zoom-c.zoom)*0.04;
 
       if(!gestureRef.current.active && !selRef.current){
         idleRef.current+=dt;
-        if(idleRef.current>5 && c.zoom < 35) tg.angle+=dt*1.5;
+        if(idleRef.current>5 && c.zoom<35) tg.angle+=dt*1.5;
       }
 
       const dpr=window.devicePixelRatio||1;
       const rect=cv.getBoundingClientRect();
-      cv.width=rect.width*dpr;cv.height=rect.height*dpr;
+      cv.width=rect.width*dpr; cv.height=rect.height*dpr;
       ctx.setTransform(dpr,0,0,dpr,0,0);
-      const W=rect.width,H=rect.height;
-      c.scx=W/2;c.scy=H/2+H*0.06;c.zm=c.zoom;
+      const W=rect.width, H=rect.height;
+      c.scx=W/2; c.scy=H/2+H*0.06; c.zm=c.zoom;
 
       const bg=ctx.createRadialGradient(W/2,H*0.3,0,W/2,H*0.3,W*0.9);
-      bg.addColorStop(0,"#f0ece4");bg.addColorStop(0.6,"#e5e0d8");bg.addColorStop(1,"#d8d3cb");
-      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+      bg.addColorStop(0,"#f0ece4"); bg.addColorStop(0.6,"#e5e0d8"); bg.addColorStop(1,"#d8d3cb");
+      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
 
       const gP=[[-20,-14],[20,-14],[20,14],[-20,14]].map(([gx,gz])=>project(gx,-0.03,gz,c));
-      ctx.beginPath();ctx.moveTo(gP[0].sx,gP[0].sy);gP.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-      ctx.fillStyle="rgba(180,175,168,0.35)";ctx.fill();
+      ctx.beginPath(); ctx.moveTo(gP[0].sx,gP[0].sy); gP.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy)); ctx.closePath();
+      ctx.fillStyle="rgba(180,175,168,0.35)"; ctx.fill();
 
       for(let gx=-18;gx<=18;gx+=2){const p1=project(gx,0,-12,c),p2=project(gx,0,12,c);ctx.strokeStyle="rgba(150,145,138,0.08)";ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();}
       for(let gz=-12;gz<=12;gz+=2){const p1=project(-18,0,gz,c),p2=project(18,0,gz,c);ctx.strokeStyle="rgba(150,145,138,0.08)";ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();}
@@ -128,13 +263,23 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         ctx.fillText(l,p.sx,p.sy);
       });
 
-      const sorted=[...units].map(u=>({...u,_dp:project(u.x,u.y,u.z,c).dp})).sort((a,b)=>b._dp-a._dp);
+      const ang0=c.angle*Math.PI/180;
+      const ca0=Math.cos(ang0),sa0=Math.sin(ang0);
+      const sorted=[...units].map(u=>{
+        const hw=u.w/2,hd=u.d/2;
+        const corners4=[[u.x-hw,u.z-hd],[u.x+hw,u.z-hd],[u.x+hw,u.z+hd],[u.x-hw,u.z+hd]];
+        const maxDp=Math.max(...corners4.map(([x,z])=>{
+          const dx=x-c.cx,dz=z-c.cz;
+          return dx*sa0+dz*ca0;
+        }));
+        return{...u,_dp:maxDp};
+      }).sort((a,b)=>b._dp-a._dp);
       const projected=[];
       const curSel=selRef.current;
       const curFilter=filterRef.current;
 
       sorted.forEach(unit=>{
-        const hw=unit.w/2,hd=unit.d/2;
+        const hw=unit.w/2, hd=unit.d/2;
         const isSel=unit.id===curSel;
         const isDim=(curFilter&&unit.status!==curFilter);
         const st=STATUS[unit.status];
@@ -171,18 +316,16 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           ctx.fillStyle=glow;ctx.fillRect(gc.sx-gr,gc.sy-gr,gr*2,gr*2);
         }
 
-        const faces=[
-          {i:[0,1,2,3],b:0.78,n:"f"},{i:[5,4,7,6],b:0.68,n:"bk"},
-          {i:[3,2,6,7],b:1.0,n:"t"},{i:[4,5,1,0],b:0.42,n:"bt"},
-          {i:[4,0,3,7],b:0.55,n:"l"},{i:[1,5,6,2],b:0.88,n:"r"},
-        ];
-        faces.sort((a,b)=>{const dA=a.i.reduce((s,i)=>s+corners[i].dp,0);const dB=b.i.reduce((s,i)=>s+corners[i].dp,0);return dB-dA;});
+        const ang2=c.angle*Math.PI/180;
+        const camDirX=Math.sin(ang2), camDirZ=Math.cos(ang2);
+        const showFront=camDirZ>0;
+        const showBack=camDirZ<0;
+        const showLeft=camDirX<0;
+        const showRight=camDirX>0;
 
-        faces.forEach(face=>{
-          const pts=face.i.map(i=>corners[i]);
+        const drawFace=(pts,br,isTop)=>{
           ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);pts.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-          const br=face.b;
-          if(face.n==="t"&&!isDim){
+          if(isTop&&!isDim){
             const tg=ctx.createLinearGradient(pts[0].sx,pts[0].sy,pts[2].sx,pts[2].sy);
             tg.addColorStop(0,`rgba(${Math.round(cr*br)},${Math.round(cg*br)},${Math.round(cb*br)},${alpha})`);
             tg.addColorStop(1,`rgba(${Math.round(cr*br*0.85)},${Math.round(cg*br*0.85)},${Math.round(cb*br*0.85)},${alpha})`);
@@ -191,9 +334,19 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
             ctx.fillStyle=`rgba(${Math.round(cr*br)},${Math.round(cg*br)},${Math.round(cb*br)},${alpha})`;
           }
           ctx.fill();
-          if(isSel){ctx.strokeStyle="rgba(255,255,255,0.9)";ctx.lineWidth=2;ctx.stroke();}
-          else if(!isDim){ctx.strokeStyle=face.n==="t"?"rgba(255,255,255,0.18)":"rgba(0,0,0,0.04)";ctx.lineWidth=face.n==="t"?0.7:0.4;ctx.stroke();}
-        });
+          if(isSel){ctx.strokeStyle="rgba(255,255,255,0.85)";ctx.lineWidth=1.5;ctx.stroke();}
+          else if(!isDim){ctx.strokeStyle=isTop?"rgba(255,255,255,0.15)":"rgba(0,0,0,0.18)";ctx.lineWidth=isTop?0.6:0.8;ctx.stroke();}
+        };
+
+        if(!showFront)drawFace([corners[0],corners[1],corners[2],corners[3]],0.55,false);
+        if(!showBack) drawFace([corners[5],corners[4],corners[7],corners[6]],0.45,false);
+        if(!showLeft) drawFace([corners[4],corners[0],corners[3],corners[7]],0.50,false);
+        if(!showRight)drawFace([corners[1],corners[5],corners[6],corners[2]],0.65,false);
+        if(showFront) drawFace([corners[0],corners[1],corners[2],corners[3]],0.72,false);
+        if(showBack)  drawFace([corners[5],corners[4],corners[7],corners[6]],0.60,false);
+        if(showLeft)  drawFace([corners[4],corners[0],corners[3],corners[7]],0.55,false);
+        if(showRight) drawFace([corners[1],corners[5],corners[6],corners[2]],0.82,false);
+        drawFace([corners[3],corners[2],corners[6],corners[7]],1.0,true);
 
         if(!isDim&&unit.status==="available"){
           const d1=project(unit.x-hw*0.5,0.02,unit.z-hd,c),d2=project(unit.x+hw*0.5,0.02,unit.z-hd,c);
@@ -238,101 +391,15 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
     return()=>cancelAnimationFrame(frame);
   },[units,project]);
 
-  const hitTest=(cx,cy)=>{
-    const cv=canvasRef.current;if(!cv)return null;
-    const rect=cv.getBoundingClientRect();
-    const mx=cx-rect.left,my=cy-rect.top;
-    let best=null,bestD=Infinity;
-    projRef.current.forEach(({id,sx,sy,radius})=>{
-      const d=Math.sqrt((mx-sx)**2+(my-sy)**2);
-      if(d<radius*3&&d<bestD){bestD=d;best=id;}
-    });
-    return best;
-  };
-
-  const getTouchInfo=(touches)=>{
-    if(touches.length<2)return{dist:0,angle:0,mx:touches[0]?.clientX||0,my:touches[0]?.clientY||0};
-    const dx=touches[1].clientX-touches[0].clientX;
-    const dy=touches[1].clientY-touches[0].clientY;
-    return{dist:Math.sqrt(dx*dx+dy*dy),angle:Math.atan2(dy,dx),mx:(touches[0].clientX+touches[1].clientX)/2,my:(touches[0].clientY+touches[1].clientY)/2};
-  };
-
-  const applyPan=(dx,dy)=>{
-    const t=targetRef.current;
-    const scale=18/Math.max(t.zoom,10);
-    const ang=t.angle*Math.PI/180;
-    const ca=Math.cos(ang),sa=Math.sin(ang);
-    t.cx+=(dx*ca-dy*sa)*scale*0.012;
-    t.cz+=(dx*sa+dy*ca)*scale*0.012;
-  };
-
-  const ptrCache=useRef([]);
-  const lastPan=useRef({x:0,y:0});
-  const lastPinch=useRef({dist:0,angle:0,mx:0,my:0});
-
-  const onPointerDown=(e)=>{
-    ptrCache.current=ptrCache.current.filter(p=>p.pointerId!==e.pointerId);
-    ptrCache.current.push({pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY});
-    const g=gestureRef.current;
-    g.moved=false;idleRef.current=0;
-    if(ptrCache.current.length===1){
-      g.active=true;g.type="pan";
-      lastPan.current={x:e.clientX,y:e.clientY};
-      g.sx=e.clientX;g.sy=e.clientY;
-    }else if(ptrCache.current.length>=2){
-      g.active=true;g.type="pinch";g.moved=true;
-      const info=getTouchInfo(ptrCache.current);
-      lastPinch.current={dist:info.dist,angle:info.angle,mx:info.mx,my:info.my};
-    }
-  };
-
-  const onPointerMove=(e)=>{
-    ptrCache.current=ptrCache.current.map(p=>p.pointerId===e.pointerId?{pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY}:p);
-    const g=gestureRef.current;
-    if(!g.active)return;
-    if(g.type==="pan"&&ptrCache.current.length===1){
-      const dx=e.clientX-lastPan.current.x;
-      const dy=e.clientY-lastPan.current.y;
-      if(Math.abs(e.clientX-g.sx)>4||Math.abs(e.clientY-g.sy)>4)g.moved=true;
-      if(g.moved)applyPan(-dx,-dy);
-      lastPan.current={x:e.clientX,y:e.clientY};
-    }else if(g.type==="pinch"&&ptrCache.current.length>=2){
-      const info=getTouchInfo(ptrCache.current);
-      const lp=lastPinch.current;
-      if(lp.dist>0){const ratio=info.dist/lp.dist;targetRef.current.zoom=Math.max(15,Math.min(100,targetRef.current.zoom*ratio));}
-      const angleDelta=(info.angle-lp.angle)*180/Math.PI;
-      targetRef.current.angle-=angleDelta;
-      applyPan(-(info.mx-lp.mx),-(info.my-lp.my));
-      lastPinch.current={dist:info.dist,angle:info.angle,mx:info.mx,my:info.my};
-    }
-  };
-
-  const onPointerUp=(e)=>{
-    ptrCache.current=ptrCache.current.filter(p=>p.pointerId!==e.pointerId);
-    const g=gestureRef.current;
-    if(ptrCache.current.length===0){
-      if(!g.moved){const id=hitTest(e.clientX,e.clientY);if(id)onSelect(id);}
-      g.active=false;g.type=null;
-    }else if(ptrCache.current.length===1){
-      const p=ptrCache.current[0];g.type="pan";lastPan.current={x:p.clientX,y:p.clientY};
-    }
-  };
-
-  const onPointerCancel=(e)=>{
-    ptrCache.current=ptrCache.current.filter(p=>p.pointerId!==e.pointerId);
-    if(ptrCache.current.length===0){gestureRef.current.active=false;gestureRef.current.type=null;}
-  };
-
-  const onWheel=(e)=>{
-    e.preventDefault();idleRef.current=0;
-    const delta=e.deltaY>0?-3:3;
-    targetRef.current.zoom=Math.max(15,Math.min(100,targetRef.current.zoom+delta));
-  };
-
   return(
     <div style={{width:"100%",height:"100%",position:"relative"}}>
       <canvas ref={canvasRef} style={{width:"100%",height:"100%",display:"block",pointerEvents:"none"}}/>
-      <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} onPointerLeave={onPointerCancel} onWheel={onWheel} style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:2,touchAction:"none",cursor:"grab"}}/>
+      <div
+        onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}
+        onPointerLeave={onPointerCancel} onWheel={onWheel}
+        style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:2,touchAction:"none",cursor:"grab"}}
+      />
     </div>
   );
 }
@@ -340,30 +407,129 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
 // ═══════════════════════════════════════════════
 // FORM STEPS
 // ═══════════════════════════════════════════════
-function Input({label,value,onChange,placeholder,type="text"}){return(<div style={{marginBottom:14}}><label style={{display:"block",fontSize:11,fontWeight:600,color:P.sub,marginBottom:5,fontFamily:P.fontBody}}>{label}</label><input type={type} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",padding:"13px 16px",borderRadius:10,border:`1px solid ${P.border}`,background:P.card,fontSize:16,color:P.text,fontFamily:P.fontBody,outline:"none",boxSizing:"border-box",WebkitAppearance:"none"}} onFocus={e=>e.target.style.borderColor=P.gold} onBlur={e=>e.target.style.borderColor=P.border}/></div>);}
-function Step2({formData,setForm}){const set=k=>v=>setForm({...formData,[k]:v});return(<div style={{padding:"20px 16px",paddingBottom:100}}><div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>Your Information</div><div style={{fontSize:13,color:P.sub,fontFamily:P.fontBody,marginBottom:20}}>Create your account.</div><Input label="First Name" value={formData.first} onChange={set("first")} placeholder="John"/><Input label="Last Name" value={formData.last} onChange={set("last")} placeholder="Smith"/><Input label="Email" value={formData.email} onChange={set("email")} placeholder="john@example.com" type="email"/><Input label="Phone" value={formData.phone} onChange={set("phone")} placeholder="(918) 555-0000" type="tel"/><Input label="Driver's License" value={formData.dl} onChange={set("dl")} placeholder="OK-123456789"/></div>);}
-function Step3({formData,setForm,unit}){const set=k=>v=>setForm({...formData,[k]:v});const total=unit.price+34;return(<div style={{padding:"20px 16px",paddingBottom:100}}><div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>Payment</div><div style={{padding:16,borderRadius:P.radius,marginBottom:20,background:P.card,border:`1px solid ${P.border}`}}><div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8,color:P.sub,fontFamily:P.fontBody}}><span>Unit {unit.id} — {unit.label}</span><span style={{fontWeight:600,color:P.text}}>${unit.price}/mo</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8,color:P.sub,fontFamily:P.fontBody}}><span>Admin + insurance</span><span style={{fontWeight:600,color:P.text}}>$34</span></div><div style={{borderTop:`1px solid ${P.border}`,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:14,fontWeight:700,fontFamily:P.font}}>Due Today</span><span style={{fontSize:26,fontWeight:700,color:P.gold,fontFamily:P.font}}>${total}</span></div></div><Input label="Card Number" value={formData.cardNum} onChange={set("cardNum")} placeholder="4242 4242 4242 4242"/><div style={{display:"flex",gap:12}}><div style={{flex:1}}><Input label="Expiry" value={formData.cardExp} onChange={set("cardExp")} placeholder="MM/YY"/></div><div style={{flex:1}}><Input label="CVC" value={formData.cardCvc} onChange={set("cardCvc")} placeholder="123"/></div></div></div>);}
-function Step4({agreed,setAgreed,unit}){return(<div style={{padding:"20px 16px",paddingBottom:100}}><div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Agreement</div><div style={{padding:16,borderRadius:P.radius,background:P.card,border:`1px solid ${P.border}`,fontSize:12,color:P.sub,lineHeight:1.7,fontFamily:P.fontBody,marginBottom:16}}><p><strong>Unit {unit.id}</strong> — {unit.label} — ${unit.price}/mo. Personal property only. $15 late fee. Non-transferable access codes. $9/mo insurance. OK Title 42 lien rights.</p></div><div onClick={()=>setAgreed(!agreed)} style={{padding:16,borderRadius:P.radius,border:`1.5px solid ${agreed?P.gold:P.border}`,background:agreed?P.goldLight:P.card,cursor:"pointer",display:"flex",alignItems:"center",gap:14}}><div style={{width:26,height:26,borderRadius:7,border:`2px solid ${agreed?P.gold:"#d6d3d1"}`,background:agreed?P.gold:"#fff",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:14,fontWeight:700,flexShrink:0}}>{agreed&&"✓"}</div><div style={{fontSize:13,fontWeight:700,color:P.text,fontFamily:P.fontBody}}>I agree to the terms</div></div></div>);}
-function Step5({unit,formData}){const[gc]=useState(genCode);const[uc]=useState(genCode);const[cp,scp]=useState(null);const copy=(t,w)=>{navigator.clipboard?.writeText(t);scp(w);setTimeout(()=>scp(null),2000);};return(<div style={{padding:"28px 16px",textAlign:"center",paddingBottom:40}}><style>{`@keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)}}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style><div style={{width:64,height:64,borderRadius:"50%",background:`linear-gradient(135deg,${P.gold},#d4a843)`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:28,color:"#fff",animation:"pop 0.5s ease-out",boxShadow:`0 8px 28px ${P.gold}40`}}>✓</div><div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,animation:"fadeUp 0.4s 0.15s both"}}>Welcome Home</div><div style={{fontSize:13,color:P.sub,fontFamily:P.fontBody,marginTop:4,marginBottom:20,animation:"fadeUp 0.4s 0.25s both"}}>Unit {unit.id} is yours.</div><div style={{display:"flex",flexDirection:"column",gap:10,animation:"fadeUp 0.4s 0.35s both"}}>{[{l:"GATE CODE",c:gc,i:"🚪",d:"Main gate"},{l:"UNIT CODE",c:uc,i:"🔐",d:"Unit lock"}].map(({l,c:code,i,d})=>(<div key={l} onClick={()=>copy(code,l)} style={{padding:"16px",borderRadius:P.radius,background:P.goldLight,border:`1.5px solid ${P.gold}30`,cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left"}}><div style={{fontSize:28}}>{i}</div><div style={{flex:1}}><div style={{fontSize:8,fontWeight:800,color:P.gold,letterSpacing:"0.12em",fontFamily:P.fontBody}}>{l}</div><div style={{fontSize:26,fontWeight:800,color:P.text,fontFamily:"monospace"}}>{code}</div><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody}}>{d}</div></div><div style={{fontSize:10,fontWeight:700,color:cp===l?P.gold:P.muted,fontFamily:P.fontBody}}>{cp===l?"COPIED!":"TAP"}</div></div>))}</div></div>);}
+function Input({label,value,onChange,placeholder,type="text"}){
+  return(
+    <div style={{marginBottom:14}}>
+      <label style={{display:"block",fontSize:11,fontWeight:600,color:P.sub,marginBottom:5,fontFamily:P.fontBody}}>{label}</label>
+      <input type={type} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+        style={{width:"100%",padding:"13px 16px",borderRadius:10,border:`1px solid ${P.border}`,background:P.card,fontSize:16,color:P.text,fontFamily:P.fontBody,outline:"none",boxSizing:"border-box",WebkitAppearance:"none"}}
+        onFocus={e=>e.target.style.borderColor=P.gold} onBlur={e=>e.target.style.borderColor=P.border}/>
+    </div>
+  );
+}
+
+function Step2({formData,setForm}){
+  const set=k=>v=>setForm({...formData,[k]:v});
+  return(
+    <div style={{padding:"20px 16px",paddingBottom:100}}>
+      <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>Your Information</div>
+      <div style={{fontSize:13,color:P.sub,fontFamily:P.fontBody,marginBottom:20}}>Create your account.</div>
+      <Input label="First Name" value={formData.first} onChange={set("first")} placeholder="John"/>
+      <Input label="Last Name" value={formData.last} onChange={set("last")} placeholder="Smith"/>
+      <Input label="Email" value={formData.email} onChange={set("email")} placeholder="john@example.com" type="email"/>
+      <Input label="Phone" value={formData.phone} onChange={set("phone")} placeholder="(918) 555-0000" type="tel"/>
+      <Input label="Driver's License" value={formData.dl} onChange={set("dl")} placeholder="OK-123456789"/>
+    </div>
+  );
+}
+
+function Step3({formData,setForm,unit}){
+  const set=k=>v=>setForm({...formData,[k]:v});
+  const total=unit.price+34;
+  return(
+    <div style={{padding:"20px 16px",paddingBottom:100}}>
+      <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>Payment</div>
+      <div style={{padding:16,borderRadius:P.radius,marginBottom:20,background:P.card,border:`1px solid ${P.border}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8,color:P.sub,fontFamily:P.fontBody}}>
+          <span>Unit {unit.id} — {unit.label}</span><span style={{fontWeight:600,color:P.text}}>${unit.price}/mo</span>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8,color:P.sub,fontFamily:P.fontBody}}>
+          <span>Admin + insurance</span><span style={{fontWeight:600,color:P.text}}>$34</span>
+        </div>
+        <div style={{borderTop:`1px solid ${P.border}`,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:14,fontWeight:700,fontFamily:P.font}}>Due Today</span>
+          <span style={{fontSize:26,fontWeight:700,color:P.gold,fontFamily:P.font}}>${total}</span>
+        </div>
+      </div>
+      <Input label="Card Number" value={formData.cardNum} onChange={set("cardNum")} placeholder="4242 4242 4242 4242"/>
+      <div style={{display:"flex",gap:12}}>
+        <div style={{flex:1}}><Input label="Expiry" value={formData.cardExp} onChange={set("cardExp")} placeholder="MM/YY"/></div>
+        <div style={{flex:1}}><Input label="CVC" value={formData.cardCvc} onChange={set("cardCvc")} placeholder="123"/></div>
+      </div>
+    </div>
+  );
+}
+
+function Step4({agreed,setAgreed,unit}){
+  return(
+    <div style={{padding:"20px 16px",paddingBottom:100}}>
+      <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Agreement</div>
+      <div style={{padding:16,borderRadius:P.radius,background:P.card,border:`1px solid ${P.border}`,fontSize:12,color:P.sub,lineHeight:1.7,fontFamily:P.fontBody,marginBottom:16}}>
+        <p><strong>Unit {unit.id}</strong> — {unit.label} — ${unit.price}/mo. Personal property only. $15 late fee. Non-transferable access codes. $9/mo insurance. OK Title 42 lien rights.</p>
+      </div>
+      <div onClick={()=>setAgreed(!agreed)} style={{padding:16,borderRadius:P.radius,border:`1.5px solid ${agreed?P.gold:P.border}`,background:agreed?P.goldLight:P.card,cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
+        <div style={{width:26,height:26,borderRadius:7,border:`2px solid ${agreed?P.gold:"#d6d3d1"}`,background:agreed?P.gold:"#fff",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:14,fontWeight:700,flexShrink:0}}>{agreed&&"✓"}</div>
+        <div style={{fontSize:13,fontWeight:700,color:P.text,fontFamily:P.fontBody}}>I agree to the terms</div>
+      </div>
+    </div>
+  );
+}
+
+function Step5({unit}){
+  const [gc]=useState(genCode);
+  const [uc]=useState(genCode);
+  const [cp,scp]=useState(null);
+  const copy=(txt,w)=>{navigator.clipboard?.writeText(txt);scp(w);setTimeout(()=>scp(null),2000);};
+  return(
+    <div style={{padding:"28px 16px",textAlign:"center",paddingBottom:40}}>
+      <style>{`@keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)}}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{width:64,height:64,borderRadius:"50%",background:`linear-gradient(135deg,${P.gold},#d4a843)`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:28,color:"#fff",animation:"pop 0.5s ease-out",boxShadow:`0 8px 28px ${P.gold}40`}}>✓</div>
+      <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,animation:"fadeUp 0.4s 0.15s both"}}>Welcome Home</div>
+      <div style={{fontSize:13,color:P.sub,fontFamily:P.fontBody,marginTop:4,marginBottom:20,animation:"fadeUp 0.4s 0.25s both"}}>Unit {unit.id} is yours.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,animation:"fadeUp 0.4s 0.35s both"}}>
+        {[{l:"GATE CODE",c:gc,i:"🚪",d:"Main gate"},{l:"UNIT CODE",c:uc,i:"🔐",d:"Unit lock"}].map(({l,c:code,i,d})=>(
+          <div key={l} onClick={()=>copy(code,l)} style={{padding:"16px",borderRadius:P.radius,background:P.goldLight,border:`1.5px solid ${P.gold}30`,cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+            <div style={{fontSize:28}}>{i}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:8,fontWeight:800,color:P.gold,letterSpacing:"0.12em",fontFamily:P.fontBody}}>{l}</div>
+              <div style={{fontSize:26,fontWeight:800,color:P.text,fontFamily:"monospace"}}>{code}</div>
+              <div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody}}>{d}</div>
+            </div>
+            <div style={{fontSize:10,fontWeight:700,color:cp===l?P.gold:P.muted,fontFamily:P.fontBody}}>{cp===l?"COPIED!":"TAP"}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════
 export default function App(){
-  const[mode,setMode]=useState(null);
-  const[step,setStep]=useState(0);
-  const[units]=useState(ALL_UNITS);
-  const[selId,setSelId]=useState(null);
-  const[sf,setSf]=useState(null);
-  const[form,setForm]=useState({});
-  const[agreed,setAgreed]=useState(false);
-  const[fs,setFs]=useState(false);
+  const [mode,setMode]=useState(null);
+  const [step,setStep]=useState(0);
+  const [units]=useState(ALL_UNITS);
+  const [selId,setSelId]=useState(null);
+  const [sf,setSf]=useState(null);
+  const [form,setForm]=useState({});
+  const [agreed,setAgreed]=useState(false);
+  const [fs,setFs]=useState(false);
   const sel=selId?units.find(u=>u.id===selId):null;
-  const ok=()=>{if(step===0)return!!sel&&sel.status==="available";if(step===1)return form.first&&form.last&&form.email&&form.phone;if(step===2)return form.cardNum&&form.cardExp&&form.cardCvc;if(step===3)return agreed;return false;};
+  const ok=()=>{
+    if(step===0)return!!sel&&sel.status==="available";
+    if(step===1)return form.first&&form.last&&form.email&&form.phone;
+    if(step===2)return form.cardNum&&form.cardExp&&form.cardCvc;
+    if(step===3)return agreed;
+    return false;
+  };
 
+  const fonts=<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>;
+
+  // ── HOME ──
   if(!mode)return(
     <div style={{width:"100%",height:"100vh",maxWidth:480,margin:"0 auto",background:P.bg,fontFamily:P.fontBody,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:32,boxSizing:"border-box",position:"relative"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+      {fonts}
       <button onClick={()=>setMode("setup")} style={{position:"absolute",top:16,right:16,width:36,height:36,borderRadius:8,border:`1px solid ${P.border}`,background:P.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,color:P.muted}}>⚙️</button>
       <div style={{width:64,height:64,borderRadius:16,background:`linear-gradient(135deg,${P.gold},#d4a843)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff",boxShadow:`0 8px 28px ${P.gold}30`}}>SC</div>
       <div style={{textAlign:"center"}}>
@@ -372,7 +538,11 @@ export default function App(){
         <div style={{fontSize:11,color:P.sub,marginTop:2}}>{FACILITY.address}</div>
       </div>
       <div style={{display:"flex",gap:12,marginTop:4}}>
-        {[{v:units.filter(u=>u.status==="available").length,l:"Available",c:STATUS.available.color},{v:units.length,l:"Total Units",c:P.sub},{v:Math.round(units.filter(u=>u.status!=="available").length/units.length*100)+"%",l:"Occupied",c:STATUS.occupied.color}].map(({v,l,c})=>(<div key={l} style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:700,color:c,fontFamily:P.font}}>{v}</div><div style={{fontSize:9,color:P.muted,fontFamily:P.fontBody}}>{l}</div></div>))}
+        {[
+          {v:units.filter(u=>u.status==="available").length,l:"Available",c:STATUS.available.color},
+          {v:units.length,l:"Total Units",c:P.sub},
+          {v:Math.round(units.filter(u=>u.status!=="available").length/units.length*100)+"%",l:"Occupied",c:STATUS.occupied.color},
+        ].map(({v,l,c})=>(<div key={l} style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:700,color:c,fontFamily:P.font}}>{v}</div><div style={{fontSize:9,color:P.muted,fontFamily:P.fontBody}}>{l}</div></div>))}
       </div>
       <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10,marginTop:8}}>
         <button onClick={()=>setMode("customer")} style={{width:"100%",padding:"16px",borderRadius:P.radius,border:"none",background:`linear-gradient(135deg,${P.gold},#b8943f)`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,boxShadow:`0 4px 16px ${P.gold}25`}}>Rent a Unit</button>
@@ -382,9 +552,10 @@ export default function App(){
     </div>
   );
 
+  // ── SETUP ──
   if(mode==="setup")return(
     <div style={{width:"100%",height:"100vh",maxWidth:480,margin:"0 auto",background:P.bg,fontFamily:P.fontBody,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+      {fonts}
       <div style={{padding:"12px 16px",background:P.card,borderBottom:`1px solid ${P.border}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${P.gold},#d4a843)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>SC</div>
@@ -394,7 +565,25 @@ export default function App(){
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
         <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Setup & Configuration</div>
-        {[{icon:"🛰️",title:"AI Satellite Scan",desc:"Upload an overhead photo and AI auto-generates your facility layout",tag:"Powered by Haiku",tagColor:P.gold},{icon:"🏗️",title:"Manual Builder",desc:"Configure buildings, rows, and units step by step",tag:"Full Control",tagColor:P.blue},{icon:"🎨",title:"Branding & Theme",desc:"Set your facility name, logo, colors, and contact info",tag:"Customize",tagColor:P.success},{icon:"💳",title:"Billing Setup",desc:"Connect Stripe for automated monthly payments",tag:"Coming Soon",tagColor:P.muted},{icon:"🔐",title:"Smart Lock Integration",desc:"Connect Nokē, Janus, or DoorKing for automated access codes",tag:"Coming Soon",tagColor:P.muted},{icon:"🤖",title:"AI Assistant Settings",desc:"Configure your facility's Haiku-powered AI copilot",tag:"Coming Soon",tagColor:P.muted}].map(({icon,title,desc,tag,tagColor})=>(<div key={title} style={{padding:16,borderRadius:P.radius,border:`1px solid ${P.border}`,background:P.card,marginBottom:10,cursor:"pointer",display:"flex",gap:14,alignItems:"flex-start"}}><div style={{fontSize:26,flexShrink:0,marginTop:2}}>{icon}</div><div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:15,fontWeight:700,color:P.text,fontFamily:P.font}}>{title}</span><span style={{padding:"1px 6px",borderRadius:4,background:tagColor+"15",color:tagColor,fontSize:8,fontWeight:700,fontFamily:P.fontBody}}>{tag}</span></div><div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody,lineHeight:1.4}}>{desc}</div></div></div>))}
+        {[
+          {icon:"🛰️",title:"AI Satellite Scan",desc:"Upload an overhead photo and AI auto-generates your facility layout",tag:"Powered by Haiku",tagColor:P.gold},
+          {icon:"🏗️",title:"Manual Builder",desc:"Configure buildings, rows, and units step by step",tag:"Full Control",tagColor:P.blue},
+          {icon:"🎨",title:"Branding & Theme",desc:"Set your facility name, logo, colors, and contact info",tag:"Customize",tagColor:P.success},
+          {icon:"💳",title:"Billing Setup",desc:"Connect Stripe for automated monthly payments",tag:"Coming Soon",tagColor:P.muted},
+          {icon:"🔐",title:"Smart Lock Integration",desc:"Connect Nokē, Janus, or DoorKing for automated access codes",tag:"Coming Soon",tagColor:P.muted},
+          {icon:"🤖",title:"AI Assistant Settings",desc:"Configure your facility's Haiku-powered AI copilot",tag:"Coming Soon",tagColor:P.muted},
+        ].map(({icon,title,desc,tag,tagColor})=>(
+          <div key={title} style={{padding:16,borderRadius:P.radius,border:`1px solid ${P.border}`,background:P.card,marginBottom:10,cursor:"pointer",display:"flex",gap:14,alignItems:"flex-start"}}>
+            <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{icon}</div>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                <span style={{fontSize:15,fontWeight:700,color:P.text,fontFamily:P.font}}>{title}</span>
+                <span style={{padding:"1px 6px",borderRadius:4,background:tagColor+"15",color:tagColor,fontSize:8,fontWeight:700,fontFamily:P.fontBody}}>{tag}</span>
+              </div>
+              <div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody,lineHeight:1.4}}>{desc}</div>
+            </div>
+          </div>
+        ))}
         <div style={{marginTop:16,padding:16,borderRadius:P.radius,background:P.goldLight,border:`1px solid ${P.gold}20`}}>
           <div style={{fontSize:10,fontWeight:700,color:P.goldDark,fontFamily:P.fontBody,letterSpacing:"0.06em",marginBottom:8}}>CURRENT FACILITY</div>
           <div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>{FACILITY.name}</div>
@@ -410,6 +599,23 @@ export default function App(){
     </div>
   );
 
+  // ── FULLSCREEN MAP ──
+  if(fs)return(
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:200,background:P.bg}}>
+      {fonts}
+      <div style={{width:"100%",height:"100%",position:"relative"}}>
+        <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={sf}/>
+        <button onClick={()=>setFs(false)} style={{position:"absolute",top:12,right:12,width:36,height:36,borderRadius:8,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,color:P.sub,zIndex:10,fontWeight:700}}>✕</button>
+        {sel&&<button onClick={()=>setSelId(null)} style={{position:"absolute",bottom:16,left:16,padding:"8px 16px",borderRadius:8,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,color:P.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,zIndex:10}}>↑ Zoom Out</button>}
+        <div style={{position:"absolute",top:12,left:12,display:"flex",gap:4,zIndex:10,flexWrap:"wrap",maxWidth:"70%"}}>
+          {Object.entries(STATUS).map(([k,v])=>(<button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${sf===k?v.color+"40":"rgba(240,236,228,0.6)"}`,background:sf===k?v.color+"18":"rgba(255,255,255,0.88)",backdropFilter:"blur(8px)",color:sf===k?v.color:P.muted,fontSize:8,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:v.color}}/>{v.label}</button>))}
+        </div>
+        {sel&&(<div style={{position:"absolute",bottom:16,right:16,maxWidth:"65%",padding:"10px 14px",borderRadius:10,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(10px)",border:`1px solid ${P.gold}20`,zIndex:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}><div><span style={{fontSize:14,fontWeight:700,color:P.text,fontFamily:P.font}}>Unit {sel.id}</span><span style={{marginLeft:6,padding:"1px 6px",borderRadius:3,background:STATUS[sel.status].color+"18",color:STATUS[sel.status].color,fontSize:8,fontWeight:700,fontFamily:P.fontBody}}>{STATUS[sel.status].label}</span><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody,marginTop:2}}>{sel.label} · {sel.sqft} ft²</div></div><div style={{fontSize:18,fontWeight:700,color:P.gold,fontFamily:P.font,whiteSpace:"nowrap"}}>${sel.price}<span style={{fontSize:9,color:P.muted}}>/mo</span></div></div></div>)}
+      </div>
+    </div>
+  );
+
+  // ── CUSTOMER / OWNER FLOW ──
   const detailCard=sel?(
     <div key={sel.id} style={{padding:"12px 16px",flexShrink:0,borderTop:`1px solid ${P.border}`,background:P.card}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
@@ -432,24 +638,9 @@ export default function App(){
     </div>
   ):null;
 
-  if(fs)return(
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:200,background:P.bg}}>
-      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <div style={{width:"100%",height:"100%",position:"relative"}}>
-        <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={sf}/>
-        <button onClick={()=>setFs(false)} style={{position:"absolute",top:12,right:12,width:36,height:36,borderRadius:8,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,color:P.sub,zIndex:10,fontWeight:700}}>✕</button>
-        {sel&&<button onClick={()=>setSelId(null)} style={{position:"absolute",bottom:16,left:16,padding:"8px 16px",borderRadius:8,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,color:P.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,zIndex:10}}>↑ Zoom Out</button>}
-        <div style={{position:"absolute",top:12,left:12,display:"flex",gap:4,zIndex:10,flexWrap:"wrap",maxWidth:"70%"}}>
-          {Object.entries(STATUS).map(([k,v])=>(<button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${sf===k?v.color+"40":"rgba(240,236,228,0.6)"}`,background:sf===k?v.color+"18":"rgba(255,255,255,0.88)",backdropFilter:"blur(8px)",color:sf===k?v.color:P.muted,fontSize:8,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:v.color}}/>{v.label}</button>))}
-        </div>
-        {sel&&(<div style={{position:"absolute",bottom:16,right:16,maxWidth:"65%",padding:"10px 14px",borderRadius:10,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(10px)",border:`1px solid ${P.gold}20`,zIndex:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}><div><span style={{fontSize:14,fontWeight:700,color:P.text,fontFamily:P.font}}>Unit {sel.id}</span><span style={{marginLeft:6,padding:"1px 6px",borderRadius:3,background:STATUS[sel.status].color+"18",color:STATUS[sel.status].color,fontSize:8,fontWeight:700,fontFamily:P.fontBody}}>{STATUS[sel.status].label}</span><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody,marginTop:2}}>{sel.label} · {sel.sqft} ft²</div></div><div style={{fontSize:18,fontWeight:700,color:P.gold,fontFamily:P.font,whiteSpace:"nowrap"}}>${sel.price}<span style={{fontSize:9,color:P.muted}}>/mo</span></div></div></div>)}
-      </div>
-    </div>
-  );
-
   return(
     <div style={{width:"100%",height:"100vh",maxWidth:480,margin:"0 auto",background:P.bg,fontFamily:P.fontBody,color:P.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+      {fonts}
       <div style={{padding:"10px 16px",background:P.card,borderBottom:`1px solid ${P.border}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -461,8 +652,18 @@ export default function App(){
             <button onClick={()=>{setMode(null);setStep(0);setSelId(null);}} style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${P.border}`,background:P.card,color:P.muted,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:P.fontBody}}>Exit</button>
           </div>
         </div>
-        {mode==="customer"&&step<4&&(<div style={{marginTop:8,display:"flex",gap:3}}>{["Select","Info","Pay","Sign"].map((s,i)=>(<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><div style={{height:3,width:"100%",borderRadius:2,background:i<step?P.gold:i===step?P.goldDark:"#eae6df"}}/><span style={{fontSize:8,fontWeight:i===step?800:600,color:i<=step?P.gold:P.muted}}>{s}</span></div>))}</div>)}
+        {mode==="customer"&&step<4&&(
+          <div style={{marginTop:8,display:"flex",gap:3}}>
+            {["Select","Info","Pay","Sign"].map((s,i)=>(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                <div style={{height:3,width:"100%",borderRadius:2,background:i<step?P.gold:i===step?P.goldDark:"#eae6df"}}/>
+                <span style={{fontSize:8,fontWeight:i===step?800:600,color:i<=step?P.gold:P.muted}}>{s}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
       <div style={{flex:1,overflow:step===0?"hidden":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
         {step===0&&(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -484,10 +685,11 @@ export default function App(){
           </div>
         )}
         {step===1&&<Step2 formData={form} setForm={setForm}/>}
-        {step===2&&<Step3 formData={form} setForm={setForm} unit={sel}/>}
-        {step===3&&<Step4 agreed={agreed} setAgreed={setAgreed} unit={sel}/>}
-        {step===4&&<Step5 unit={sel} formData={form}/>}
+        {step===2&&sel&&<Step3 formData={form} setForm={setForm} unit={sel}/>}
+        {step===3&&sel&&<Step4 agreed={agreed} setAgreed={setAgreed} unit={sel}/>}
+        {step===4&&sel&&<Step5 unit={sel} formData={form}/>}
       </div>
+
       {mode==="customer"&&step<4&&(
         <div style={{padding:"8px 16px",paddingBottom:"max(8px,env(safe-area-inset-bottom))",background:P.card,borderTop:`1px solid ${P.border}`,flexShrink:0}}>
           <button onClick={()=>{if(ok())setStep(step+1)}} disabled={!ok()} style={{width:"100%",padding:"14px 0",borderRadius:P.radius,border:"none",background:ok()?`linear-gradient(135deg,${P.gold},#b8943f)`:"#eae6df",color:ok()?"#fff":"#b8afa5",fontSize:15,fontWeight:700,cursor:ok()?"pointer":"default",fontFamily:P.fontBody,boxShadow:ok()?`0 4px 16px ${P.gold}30`:"none"}}>
