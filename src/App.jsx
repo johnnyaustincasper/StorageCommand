@@ -28,32 +28,43 @@ const TENANTS=[
 function genUnits(){
   const u=[];
   const sts=["available","available","available","occupied","occupied","occupied","occupied","reserved","maintenance","overdue"];
-  const dims={small:{w:1.4,h:0.7,d:1.4},medium:{w:1.4,h:1.1,d:1.4},large:{w:1.4,h:1.6,d:1.4},xl:{w:1.4,h:2.2,d:1.4}};
-  const rZ=[{z:-6,f:1},{z:-2,f:-1},{z:4,f:1},{z:8,f:-1}];
-  const rows=["A1","A2","B1","B2"];
+  // depth 1.0 so back-to-back rows don't overlap. Width 1.4 with 0.3 gap
+  const dims={small:{w:1.4,h:0.7,d:1.0},medium:{w:1.4,h:1.1,d:1.0},large:{w:1.4,h:1.6,d:1.0},xl:{w:1.4,h:2.2,d:1.0}};
+  // 3 buildings, each 2 back-to-back rows. Centers: A=-10, B=-4.5, C=1
+  // Each building: row1 at center-1.3 (f=1), row2 at center+1.3 (f=-1)
+  // 0.6 unit gap between unit backs, ~2.5 unit road between buildings
+  const rows=[
+    {name:"A1",z:-11.3,f:1},
+    {name:"A2",z:-8.7, f:-1},
+    {name:"B1",z:-5.8, f:1},
+    {name:"B2",z:-3.2, f:-1},
+    {name:"C1",z:-0.3, f:1},
+    {name:"C2",z:2.3,  f:-1},
+  ];
   const cfg=[
-    ["small","small","medium","medium","large","xl","medium","small","small"],
-    ["small","medium","medium","large","large","xl","medium","small","small"],
-    ["medium","large","xl","xl","large","medium","small","small","small"],
-    ["medium","large","xl","large","medium","medium","small","small","small"],
+    ["small","small","medium","medium","large","xl","large","medium","small","small","medium","large","xl","large","medium","small","small"],
+    ["small","medium","medium","large","xl","large","medium","small","small","medium","medium","large","xl","large","medium","small","small"],
+    ["medium","small","small","medium","large","xl","large","medium","small","small","medium","large","xl","medium","small","small","small"],
+    ["small","small","medium","large","xl","large","medium","medium","small","small","medium","xl","large","medium","small","small","small"],
+    ["medium","medium","small","small","large","xl","medium","small","medium","large","xl","large","medium","small","small","small","medium"],
+    ["small","medium","large","xl","large","medium","small","small","medium","medium","large","xl","medium","small","small","medium","small"],
   ];
   let ti=0;
-  // Use seeded-ish deterministic status based on index so it's stable
-  rows.forEach((row,ri)=>{
-    let x=-12;
+  rows.forEach(({name,z,f},ri)=>{
+    let x=-14;
     cfg[ri].forEach((type,i)=>{
       const d=dims[type];
       const s=SIZES.find(s=>s.key===type);
-      const status=sts[(ri*9+i)%sts.length];
+      const status=sts[(ri*17+i*3+7)%sts.length];
       const tenant=(status==="occupied"||status==="overdue")?TENANTS[ti++%TENANTS.length]:null;
       u.push({
-        id:`${row}-${String(i+1).padStart(2,"0")}`,
+        id:`${name}-${String(i+1).padStart(2,"0")}`,
         type,status,...s,
         w:d.w,h:d.h,d:d.d,
         tenant,
-        balance:status==="overdue"?Math.floor((ri*9+i)*37%300)+80:0,
+        balance:status==="overdue"?Math.floor((ri*17+i)*37%300)+80:0,
         x:x+d.w/2,y:0,
-        z:rZ[ri].z+(rZ[ri].f*d.d)/2,
+        z:z+(f*d.d/2),
       });
       x+=d.w+0.3;
     });
@@ -78,8 +89,8 @@ const hx=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slic
 function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const canvasRef = useRef(null);
   const projRef = useRef([]);
-  const camRef = useRef({ angle:30, tiltX:-1.1, cx:0, cz:1, zoom:28, dist:30 });
-  const targetRef = useRef({ angle:30, tiltX:-1.1, cx:0, cz:1, zoom:28 });
+  const camRef = useRef({ angle:30, tiltX:-1.1, cx:1, cz:-3, zoom:13, dist:30 });
+  const targetRef = useRef({ angle:30, tiltX:-1.1, cx:1, cz:-3, zoom:13 });
   const selRef = useRef(null);
   const filterRef = useRef(null);
   const gestureRef = useRef({ active:false, type:null, sx:0, sy:0, moved:false });
@@ -87,6 +98,47 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const ptrCache = useRef([]);
   const lastPan = useRef({x:0,y:0});
   const lastPinch = useRef({dist:0,angle:0,mx:0,my:0});
+
+  // Critters state — initialized once
+  const crittersRef = useRef(null);
+  if(!crittersRef.current){
+    const mkBunny=()=>({
+      type:"bunny", x:(Math.random()-0.5)*32, z:(Math.random()-0.5)*20,
+      tx:(Math.random()-0.5)*32, tz:(Math.random()-0.5)*20,
+      wait:Math.random()*4, hopPhase:0, hopping:false,
+      flip:Math.random()>0.5,
+    });
+    const mkSquirrel=()=>({
+      type:"squirrel", x:(Math.random()-0.5)*32, z:(Math.random()-0.5)*20,
+      tx:(Math.random()-0.5)*32, tz:(Math.random()-0.5)*20,
+      wait:Math.random()*6, phase:0, flip:false,
+    });
+    const mkBird=()=>({
+      type:"bird", x:-60, z:(Math.random()-0.5)*10,
+      speed:18+Math.random()*12, y:3+Math.random()*2,
+      wing:0, wait:Math.random()*12,
+    });
+    crittersRef.current=[
+      mkBunny(),mkBunny(),mkBunny(),
+      mkSquirrel(),mkSquirrel(),
+      mkBird(),mkBird(),
+    ];
+  }
+
+  // PC right-click rotate
+  const rightDragRef = useRef({active:false,lx:0,ly:0});
+  const onMouseDown=(e)=>{
+    if(e.button===2){e.preventDefault();rightDragRef.current={active:true,lx:e.clientX,ly:e.clientY};}
+  };
+  const onMouseMove=(e)=>{
+    if(!rightDragRef.current.active)return;
+    const dx=e.clientX-rightDragRef.current.lx;
+    targetRef.current.angle+=dx*0.4;
+    rightDragRef.current={active:true,lx:e.clientX,ly:e.clientY};
+    idleRef.current=0;
+  };
+  const onMouseUp=(e)=>{if(e.button===2)rightDragRef.current.active=false;};
+  const onContextMenu=(e)=>e.preventDefault();
 
   useEffect(()=>{selRef.current=selId;},[selId]);
   useEffect(()=>{filterRef.current=statusFilter;},[statusFilter]);
@@ -97,7 +149,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const u=units.find(u=>u.id===selId);
       if(u){t.cx=u.x;t.cz=u.z;t.zoom=60;t.tiltX=-0.6;}
     }else{
-      t.cx=0;t.cz=1;t.zoom=28;t.tiltX=-1.1;
+      t.cx=1;t.cz=-3;t.zoom=13;t.tiltX=-1.1;
     }
   },[selId,units]);
 
@@ -234,32 +286,123 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const W=rect.width, H=rect.height;
       c.scx=W/2; c.scy=H/2+H*0.06; c.zm=c.zoom;
 
-      const bg=ctx.createRadialGradient(W/2,H*0.3,0,W/2,H*0.3,W*0.9);
-      bg.addColorStop(0,"#f0ece4"); bg.addColorStop(0.6,"#e5e0d8"); bg.addColorStop(1,"#d8d3cb");
-      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+      // ── SKY ──
+      const sky=ctx.createLinearGradient(0,0,0,H);
+      sky.addColorStop(0,"#c9e8f5"); sky.addColorStop(0.7,"#e8f4fb"); sky.addColorStop(1,"#eef7e8");
+      ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
 
-      const gP=[[-20,-14],[20,-14],[20,14],[-20,14]].map(([gx,gz])=>project(gx,-0.03,gz,c));
-      ctx.beginPath(); ctx.moveTo(gP[0].sx,gP[0].sy); gP.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy)); ctx.closePath();
-      ctx.fillStyle="rgba(180,175,168,0.35)"; ctx.fill();
+      // ── GRASS (full ground) ──
+      const gP=[[-36,-26],[36,-26],[36,26],[-36,26]].map(([gx,gz])=>project(gx,-0.05,gz,c));
+      ctx.beginPath();ctx.moveTo(gP[0].sx,gP[0].sy);gP.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
+      const grassG=ctx.createLinearGradient(0,gP[0].sy,0,gP[2].sy);
+      grassG.addColorStop(0,"#7ec850");grassG.addColorStop(1,"#5fa832");
+      ctx.fillStyle=grassG;ctx.fill();
 
-      for(let gx=-18;gx<=18;gx+=2){const p1=project(gx,0,-12,c),p2=project(gx,0,12,c);ctx.strokeStyle="rgba(150,145,138,0.08)";ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();}
-      for(let gz=-12;gz<=12;gz+=2){const p1=project(-18,0,gz,c),p2=project(18,0,gz,c);ctx.strokeStyle="rgba(150,145,138,0.08)";ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();}
+      // ── ROAD SYSTEM ──
+      // 3 buildings: A(z=-11.5 to -6.5), B(z=-4.5 to 0.5), C(z=2.5 to 7.5)
+      // Units span x=-14.6 to +19.4
+      const road="#c4b896";
+      const roadEdge="rgba(180,168,138,0.5)";
+      const drawRoad=(pts)=>{
+        ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);
+        pts.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
+        ctx.fillStyle=road;ctx.fill();
+        ctx.strokeStyle=roadEdge;ctx.lineWidth=0.7;ctx.stroke();
+      };
+      // Perimeter top (above Bldg A, z=-13 to -12)
+      drawRoad([[-19,-13],[21,-13],[21,-12],[-19,-12]].map(([x,z])=>project(x,-0.02,z,c)));
+      // Perimeter bottom (below Bldg C, z=3 to 4.5)
+      drawRoad([[-19,3],[21,3],[21,4.5],[-19,4.5]].map(([x,z])=>project(x,-0.02,z,c)));
+      // Perimeter left
+      drawRoad([[-19,-13],[-17,-13],[-17,4.5],[-19,4.5]].map(([x,z])=>project(x,-0.02,z,c)));
+      // Perimeter right
+      drawRoad([[19,-13],[21,-13],[21,4.5],[19,4.5]].map(([x,z])=>project(x,-0.02,z,c)));
+      // Aisle between Bldg A and B (z=-8 to -6.5)
+      drawRoad([[-19,-8.2],[21,-8.2],[21,-6.3],[-19,-6.3]].map(([x,z])=>project(x,-0.02,z,c)));
+      // Aisle between Bldg B and C (z=-2.7 to -0.8)
+      drawRoad([[-19,-2.7],[21,-2.7],[21,-0.8],[-19,-0.8]].map(([x,z])=>project(x,-0.02,z,c)));
 
-      [[-7.5,-0.5],[3,10]].forEach(([z1,z2])=>{
-        const pp=[[-13.5,z1],[13.5,z1],[13.5,z2],[-13.5,z2]].map(([x,z])=>project(x,-0.02,z,c));
-        ctx.beginPath();ctx.moveTo(pp[0].sx,pp[0].sy);pp.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-        ctx.fillStyle="rgba(195,190,182,0.3)";ctx.fill();
-      });
+      // ── ENTRY ROAD (leads from outside south edge to gate) ──
+      // Gate at bottom center-right, x=1 to 5, entry road runs from z=4.5 down to z=9
+      const entryRoad=[[1,4.5],[5,4.5],[5,9],[1,9]].map(([x,z])=>project(x,-0.02,z,c));
+      ctx.beginPath();ctx.moveTo(entryRoad[0].sx,entryRoad[0].sy);
+      entryRoad.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
+      ctx.fillStyle=road;ctx.fill();
 
-      [[-1.2,-0.5],[9,10]].forEach(([z1,z2])=>{
-        const pp=[[-14,z1],[14,z1],[14,z2],[-14,z2]].map(([x,z])=>project(x,-0.015,z,c));
-        ctx.beginPath();ctx.moveTo(pp[0].sx,pp[0].sy);pp.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-        ctx.fillStyle="rgba(160,155,148,0.25)";ctx.fill();
-      });
+      // ── BLACK FENCE ──
+      // Fence runs along perimeter: x=-19 to +21, z=-13 to +4.5
+      // Gap for gate at x=1 to 5 on bottom edge (z=4.5)
+      const fenceColor="#1a1a1a";
+      const postColor="#111";
+      const fenceH=0.55; // world height
+      const drawFenceSegment=(x1,z1,x2,z2)=>{
+        // Count posts along segment
+        const dx=x2-x1, dz=z2-z1;
+        const len=Math.sqrt(dx*dx+dz*dz);
+        const spacing=1.2;
+        const count=Math.max(2,Math.round(len/spacing));
+        // Draw rail (two lines, top and mid)
+        [0.55,0.3].forEach(ht=>{
+          const pa=project(x1,ht,z1,c), pb=project(x2,ht,z2,c);
+          ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);
+          ctx.strokeStyle=fenceColor;ctx.lineWidth=Math.max(0.8,pa.sc*c.zm*0.04);ctx.stroke();
+        });
+        // Draw posts
+        for(let i=0;i<=count;i++){
+          const f=i/count;
+          const px=x1+dx*f, pz=z1+dz*f;
+          const bot=project(px,0,pz,c), top=project(px,fenceH,pz,c);
+          ctx.beginPath();ctx.moveTo(bot.sx,bot.sy);ctx.lineTo(top.sx,top.sy);
+          ctx.strokeStyle=postColor;ctx.lineWidth=Math.max(1,bot.sc*c.zm*0.055);ctx.stroke();
+          // Post cap
+          ctx.beginPath();ctx.arc(top.sx,top.sy,Math.max(0.8,top.sc*c.zm*0.04),0,Math.PI*2);
+          ctx.fillStyle=postColor;ctx.fill();
+        }
+      };
 
-      [{z:-5,l:"BUILDING A"},{z:3,l:"BUILDING B"}].forEach(({z,l})=>{
+      // Top edge
+      drawFenceSegment(-19,-13, 21,-13);
+      // Left edge
+      drawFenceSegment(-19,-13,-19, 4.5);
+      // Right edge
+      drawFenceSegment( 21,-13, 21, 4.5);
+      // Bottom left (up to gate gap)
+      drawFenceSegment(-19, 4.5,  1, 4.5);
+      // Bottom right (after gate gap)
+      drawFenceSegment(  5, 4.5, 21, 4.5);
+
+      // ── AUTOMATIC GATE ──
+      // Gate sits at x=1 to 5, z=4.5. Two gate posts + animated sliding arm
+      const gateOpen=0.5+Math.sin(t*0.4)*0.5; // slowly opens/closes for demo
+      const gateSlide=gateOpen*3.5; // slides right up to 3.5 units
+      const gLP=project(1,0,4.5,c), gRP=project(5,0,4.5,c);
+      const gLT=project(1,fenceH*1.4,4.5,c), gRT=project(5,fenceH*1.4,4.5,c);
+      // Left gate post
+      ctx.beginPath();ctx.moveTo(gLP.sx,gLP.sy);ctx.lineTo(gLT.sx,gLT.sy);
+      ctx.strokeStyle="#111";ctx.lineWidth=Math.max(2,gLP.sc*c.zm*0.1);ctx.stroke();
+      ctx.beginPath();ctx.arc(gLT.sx,gLT.sy,Math.max(1.5,gLT.sc*c.zm*0.07),0,Math.PI*2);
+      ctx.fillStyle="#222";ctx.fill();
+      // Right gate post
+      ctx.beginPath();ctx.moveTo(gRP.sx,gRP.sy);ctx.lineTo(gRT.sx,gRT.sy);
+      ctx.strokeStyle="#111";ctx.lineWidth=Math.max(2,gRP.sc*c.zm*0.1);ctx.stroke();
+      ctx.beginPath();ctx.arc(gRT.sx,gRT.sy,Math.max(1.5,gRT.sc*c.zm*0.07),0,Math.PI*2);
+      ctx.fillStyle="#222";ctx.fill();
+      // Gate arm — slides from left post toward right
+      const gArmEnd=project(1+gateSlide,fenceH*0.9,4.5,c);
+      const gArmStart=project(1,fenceH*0.9,4.5,c);
+      ctx.beginPath();ctx.moveTo(gArmStart.sx,gArmStart.sy);ctx.lineTo(gArmEnd.sx,gArmEnd.sy);
+      ctx.strokeStyle=gateOpen>0.5?"#e63939":"#e63939";
+      ctx.lineWidth=Math.max(2,gArmStart.sc*c.zm*0.09);ctx.stroke();
+      // Gate label
+      const gMid=project(3,fenceH*1.6,4.5,c);
+      ctx.font=`700 ${Math.max(6,gMid.sc*c.zm*0.12)}px 'Nunito',sans-serif`;
+      ctx.fillStyle="rgba(220,50,50,0.85)";ctx.textAlign="center";
+      ctx.fillText("GATE",gMid.sx,gMid.sy);
+
+      // ── BUILDING LABELS ──
+      [{z:-10,l:"BUILDING A"},{z:-4.5,l:"BUILDING B"},{z:1,l:"BUILDING C"}].forEach(({z,l})=>{
         const p=project(0,0.01,z,c);
-        ctx.font="800 9px 'Nunito',sans-serif";ctx.fillStyle="rgba(140,135,128,0.2)";ctx.textAlign="center";
+        ctx.font="700 8px 'Nunito',sans-serif";ctx.fillStyle="rgba(80,70,50,0.22)";ctx.textAlign="center";
         ctx.fillText(l,p.sx,p.sy);
       });
 
@@ -372,6 +515,116 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       });
       projRef.current=projected;
 
+      // ── CRITTERS ──
+      crittersRef.current.forEach(cr=>{
+        if(cr.type==="bunny"){
+          if(!cr.hopping){
+            cr.wait-=dt;
+            if(cr.wait<=0){
+              cr.tx=(Math.random()-0.5)*30; cr.tz=(Math.random()-0.5)*16;
+              cr.hopping=true; cr.hopPhase=0;
+              cr.flip=cr.tx<cr.x;
+            }
+          } else {
+            const dx=cr.tx-cr.x, dz=cr.tz-cr.z;
+            const dist=Math.sqrt(dx*dx+dz*dz);
+            if(dist<0.3){cr.hopping=false;cr.wait=1.5+Math.random()*3;}
+            else{
+              const spd=3.5*dt; const nx=dx/dist,nz=dz/dist;
+              cr.x+=nx*spd; cr.z+=nz*spd; cr.hopPhase+=dt*8;
+            }
+          }
+          const hop=cr.hopping?Math.max(0,Math.sin(cr.hopPhase)*0.4):0;
+          const bp=project(cr.x,hop,cr.z,c);
+          const sc=Math.max(0.3,bp.sc*c.zm*0.07);
+          ctx.save(); ctx.translate(bp.sx,bp.sy); if(cr.flip)ctx.scale(-1,1);
+          // Shadow
+          ctx.beginPath();ctx.ellipse(0,sc*0.4,sc*1.1,sc*0.35,0,0,Math.PI*2);
+          ctx.fillStyle="rgba(0,0,0,0.15)";ctx.fill();
+          // Body
+          ctx.beginPath();ctx.ellipse(0,0,sc*1.1,sc*0.75,0,0,Math.PI*2);
+          ctx.fillStyle="#e8e0d4";ctx.fill();
+          // Head
+          ctx.beginPath();ctx.ellipse(sc*0.9,-sc*0.5,sc*0.65,sc*0.6,0,0,Math.PI*2);
+          ctx.fillStyle="#e8e0d4";ctx.fill();
+          // Ear 1
+          ctx.beginPath();ctx.ellipse(sc*0.75,-sc*1.3,sc*0.18,sc*0.55,-0.2,0,Math.PI*2);
+          ctx.fillStyle="#e8e0d4";ctx.fill();
+          ctx.beginPath();ctx.ellipse(sc*0.75,-sc*1.3,sc*0.08,sc*0.35,-0.2,0,Math.PI*2);
+          ctx.fillStyle="#f0a0b0";ctx.fill();
+          // Ear 2
+          ctx.beginPath();ctx.ellipse(sc*1.05,-sc*1.2,sc*0.18,sc*0.55,0.15,0,Math.PI*2);
+          ctx.fillStyle="#ddd5c8";ctx.fill();
+          // Eye
+          ctx.beginPath();ctx.arc(sc*1.15,-sc*0.55,sc*0.12,0,Math.PI*2);
+          ctx.fillStyle="#2a1a1a";ctx.fill();
+          // Tail
+          ctx.beginPath();ctx.arc(-sc*0.9,sc*0.1,sc*0.3,0,Math.PI*2);
+          ctx.fillStyle="#fff";ctx.fill();
+          ctx.restore();
+        }
+
+        if(cr.type==="squirrel"){
+          cr.wait-=dt;
+          if(cr.wait<=0){
+            const moving=Math.random()>0.4;
+            if(moving){cr.tx=(Math.random()-0.5)*30;cr.tz=(Math.random()-0.5)*16;cr.wait=0.8+Math.random()*1.5;}
+            else cr.wait=0.5+Math.random()*1.5;
+          }
+          const dx=cr.tx-cr.x,dz=cr.tz-cr.z,dist=Math.sqrt(dx*dx+dz*dz);
+          if(dist>0.4){const spd=5*dt;cr.x+=dx/dist*spd;cr.z+=dz/dist*spd;cr.flip=dx<0;}
+          cr.phase+=dt*6;
+          const sp=project(cr.x,0,cr.z,c);
+          const sc=Math.max(0.3,sp.sc*c.zm*0.065);
+          const bodyBob=dist>0.4?Math.sin(cr.phase)*sc*0.15:0;
+          ctx.save();ctx.translate(sp.sx,sp.sy+bodyBob);if(cr.flip)ctx.scale(-1,1);
+          // Shadow
+          ctx.beginPath();ctx.ellipse(0,sc*0.3,sc,sc*0.3,0,0,Math.PI*2);
+          ctx.fillStyle="rgba(0,0,0,0.12)";ctx.fill();
+          // Body
+          ctx.beginPath();ctx.ellipse(0,-sc*0.2,sc*0.9,sc*0.65,0,0,Math.PI*2);
+          ctx.fillStyle="#b8752a";ctx.fill();
+          // Belly
+          ctx.beginPath();ctx.ellipse(sc*0.15,-sc*0.15,sc*0.45,sc*0.4,0,0,Math.PI*2);
+          ctx.fillStyle="#e8c080";ctx.fill();
+          // Head
+          ctx.beginPath();ctx.ellipse(sc*0.85,-sc*0.75,sc*0.55,sc*0.5,0.2,0,Math.PI*2);
+          ctx.fillStyle="#b8752a";ctx.fill();
+          // Ear
+          ctx.beginPath();ctx.ellipse(sc*0.9,-sc*1.25,sc*0.15,sc*0.28,0,0,Math.PI*2);
+          ctx.fillStyle="#b8752a";ctx.fill();
+          // Eye
+          ctx.beginPath();ctx.arc(sc*1.1,-sc*0.78,sc*0.1,0,Math.PI*2);
+          ctx.fillStyle="#1a0a00";ctx.fill();
+          // Tail (big fluffy arc)
+          ctx.beginPath();ctx.moveTo(-sc*0.5,-sc*0.1);
+          ctx.bezierCurveTo(-sc*1.8,-sc*0.1,-sc*2,sc*1.2,-sc*0.8,sc*1.0);
+          ctx.strokeStyle="#c8852a";ctx.lineWidth=sc*0.45;ctx.lineCap="round";ctx.stroke();
+          ctx.strokeStyle="#d4a060";ctx.lineWidth=sc*0.2;ctx.stroke();
+          ctx.restore();
+        }
+
+        if(cr.type==="bird"){
+          cr.wait-=dt;
+          if(cr.wait>0)return;
+          cr.x+=cr.speed*dt;
+          cr.wing+=dt*8;
+          if(cr.x>70){cr.x=-70;cr.z=(Math.random()-0.5)*10;cr.wait=8+Math.random()*10;}
+          const bp=project(cr.x,cr.y,cr.z,c);
+          const sc=Math.max(0.5,bp.sc*c.zm*0.05);
+          const wingY=Math.sin(cr.wing)*sc*0.7;
+          ctx.save();ctx.translate(bp.sx,bp.sy);
+          ctx.strokeStyle="#334";ctx.lineWidth=sc*0.4;ctx.lineCap="round";
+          // Wings
+          ctx.beginPath();ctx.moveTo(-sc*1.2,wingY);ctx.quadraticCurveTo(-sc*0.5,0,0,0);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(sc*1.2,wingY);ctx.quadraticCurveTo(sc*0.5,0,0,0);ctx.stroke();
+          // Body
+          ctx.beginPath();ctx.ellipse(sc*0.3,0,sc*0.5,sc*0.2,0.2,0,Math.PI*2);
+          ctx.fillStyle="#445";ctx.fill();
+          ctx.restore();
+        }
+      });
+
       const now=new Date();
       const tStr=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
       const avC=units.filter(u=>u.status==="available").length;
@@ -398,6 +651,8 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}
         onPointerLeave={onPointerCancel} onWheel={onWheel}
+        onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}
+        onContextMenu={onContextMenu}
         style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:2,touchAction:"none",cursor:"grab"}}
       />
     </div>
