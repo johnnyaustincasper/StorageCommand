@@ -1061,12 +1061,8 @@ export default function App(){
       {fonts}
       <div style={{width:"100%",height:"100%",position:"relative"}}>
         <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={sf}/>
-        <button onClick={()=>setFs(false)} style={{position:"absolute",top:12,right:12,width:36,height:36,borderRadius:8,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,color:P.sub,zIndex:10,fontWeight:700}}>✕</button>
-        {sel&&<button onClick={()=>setSelId(null)} style={{position:"absolute",bottom:16,left:16,padding:"8px 16px",borderRadius:8,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,color:P.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,zIndex:10}}>↑ Zoom Out</button>}
-        <div style={{position:"absolute",top:12,left:12,display:"flex",gap:4,zIndex:10,flexWrap:"wrap",maxWidth:"70%"}}>
-          {Object.entries(STATUS).map(([k,v])=>(<button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${sf===k?v.color+"40":"rgba(240,236,228,0.6)"}`,background:sf===k?v.color+"18":"rgba(255,255,255,0.88)",backdropFilter:"blur(8px)",color:sf===k?v.color:P.muted,fontSize:8,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:v.color}}/>{v.label}</button>))}
-        </div>
-        {sel&&(<div style={{position:"absolute",bottom:16,right:16,maxWidth:"65%",padding:"10px 14px",borderRadius:10,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(10px)",border:`1px solid ${P.gold}20`,zIndex:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}><div><span style={{fontSize:14,fontWeight:700,color:P.text,fontFamily:P.font}}>Unit {sel.id}</span><span style={{marginLeft:6,padding:"1px 6px",borderRadius:3,background:STATUS[sel.status].color+"18",color:STATUS[sel.status].color,fontSize:8,fontWeight:700,fontFamily:P.fontBody}}>{STATUS[sel.status].label}</span><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody,marginTop:2}}>{sel.label} · {sel.sqft} ft²</div></div><div style={{fontSize:18,fontWeight:700,color:P.gold,fontFamily:P.font,whiteSpace:"nowrap"}}>${sel.price}<span style={{fontSize:9,color:P.muted}}>/mo</span></div></div></div>)}
+        <button onClick={()=>setFs(false)} style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",height:38,padding:"0 16px",borderRadius:999,background:"rgba(255,255,255,0.94)",backdropFilter:"blur(12px)",border:`1px solid ${P.gold}30`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:P.text,zIndex:10,fontWeight:900,fontFamily:P.fontBody,boxShadow:"0 14px 34px rgba(26,23,20,.12)",letterSpacing:".06em",textTransform:"uppercase"}}>Close Map</button>
+        {sel&&(<div style={{position:"absolute",bottom:18,right:18,width:360,maxWidth:"calc(100% - 36px)",padding:"12px 14px",borderRadius:14,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(14px)",border:`1px solid ${P.gold}25`,zIndex:10,boxShadow:"0 18px 48px rgba(26,23,20,.14)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}><div><span style={{fontSize:15,fontWeight:900,color:P.text,fontFamily:P.font}}>Unit {sel.id}</span><span style={{marginLeft:6,padding:"2px 7px",borderRadius:999,background:STATUS[sel.status].color+"18",color:STATUS[sel.status].color,fontSize:9,fontWeight:900,fontFamily:P.fontBody}}>{STATUS[sel.status].label}</span><div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody,marginTop:3}}>{sel.label} · {sel.sqft} ft²</div></div><div style={{fontSize:20,fontWeight:800,color:P.gold,fontFamily:P.font,whiteSpace:"nowrap"}}>${sel.price}<span style={{fontSize:10,color:P.muted}}>/mo</span></div></div><button onClick={()=>setSelId(null)} style={{marginTop:10,width:"100%",padding:"8px 10px",borderRadius:10,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:10,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody}}>Clear Selection</button></div>)}
       </div>
     </div>
   );
@@ -1153,7 +1149,7 @@ export default function App(){
         {step===0&&(
           mode==="owner"?(
             <div style={{height:"100%",overflow:"auto",padding:isTablet?"24px":"16px",boxSizing:"border-box"}}>
-              <div style={{maxWidth:1440,margin:"0 auto",display:"grid",gridTemplateColumns:isDesktop?"minmax(0,1.45fr) 420px":"1fr",gap:18,alignItems:"start"}}>
+              <div style={{maxWidth:1500,margin:"0 auto",display:"grid",gridTemplateColumns:isDesktop?"minmax(0,1fr) 380px":"1fr",gap:20,alignItems:"start"}}>
                 <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
                   <div style={{background:"linear-gradient(135deg,#111827,#273244)",borderRadius:24,padding:isTablet?24:18,color:"#fff",boxShadow:"0 20px 60px rgba(17,24,39,.16)"}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:isTablet?"center":"flex-start",flexDirection:isTablet?"row":"column"}}>
@@ -1162,7 +1158,10 @@ export default function App(){
                         <div style={{fontSize:isTablet?34:26,fontWeight:800,fontFamily:P.font,letterSpacing:"-.02em",marginTop:4}}>{facility.name}</div>
                         <div style={{fontSize:12,color:"rgba(255,255,255,.62)",fontFamily:P.fontBody,marginTop:4}}>{facility.address}</div>
                       </div>
-                      <button onClick={openBuilder} style={{padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.10)",color:"#fff",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,letterSpacing:".04em",textTransform:"uppercase"}}>Edit Layout</button>
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:isTablet?"flex-end":"flex-start"}}>
+                        <button onClick={()=>setFs(true)} style={{padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.20)",background:"rgba(255,255,255,.14)",color:"#fff",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,letterSpacing:".04em",textTransform:"uppercase",boxShadow:"0 10px 26px rgba(0,0,0,.10)"}}>Fullscreen Map</button>
+                        <button onClick={openBuilder} style={{padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"#fff",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,letterSpacing:".04em",textTransform:"uppercase"}}>Edit Layout</button>
+                      </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(4,minmax(0,1fr))":"repeat(2,minmax(0,1fr))",gap:10,marginTop:18}}>
                       {[
@@ -1174,35 +1173,39 @@ export default function App(){
                     </div>
                   </div>
 
-                  <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(0,1fr) 300px":"1fr",gap:16,minHeight:isTablet?560:"auto"}}>
-                    <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:22,overflow:"hidden",minHeight:isTablet?560:420,display:"flex",flexDirection:"column"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr",gap:16,minHeight:isTablet?590:"auto",alignItems:"stretch"}}>
+                    <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:24,overflow:"hidden",minHeight:isTablet?590:440,display:"flex",flexDirection:"column",boxShadow:"0 18px 54px rgba(17,24,39,.07)"}}>
                       <div style={{padding:"14px 16px",borderBottom:`1px solid ${P.border}`,display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-                        <div><div style={{fontSize:16,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>Facility Map</div><div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody}}>Filter units by operating status, then select a door for account detail.</div></div>
-                        <div style={{display:"flex",gap:6,overflowX:"auto",maxWidth:isTablet?"none":"100%"}}>
+                        <div><div style={{fontSize:16,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>Facility Map</div><div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody}}>Filter operating status, select a door, or expand the 3D model full screen.</div></div>
+                        <div style={{display:"flex",gap:6,overflowX:"auto",maxWidth:isTablet?"none":"100%",alignItems:"center"}}>
                           <button onClick={()=>setSf(null)} style={{padding:"7px 11px",borderRadius:999,border:`1px solid ${!sf?P.gold:P.border}`,background:!sf?P.goldLight:P.card,color:!sf?P.goldDark:P.muted,fontSize:10,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap"}}>All</button>
                           {shownStatuses.map((k)=>{const v=STATUS[k];return <button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:"7px 11px",borderRadius:999,border:`1px solid ${sf===k?v.color+"55":P.border}`,background:sf===k?v.color+"12":P.card,color:sf===k?v.color:P.muted,fontSize:10,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap"}}>{v.label}</button>})}
+                          <button onClick={()=>setFs(true)} style={{padding:"7px 11px",borderRadius:999,border:`1px solid ${P.gold}55`,background:`linear-gradient(135deg,${P.goldLight},#fff)`,color:P.goldDark,fontSize:10,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",boxShadow:"0 8px 20px rgba(201,168,76,.12)"}}>⛶ Fullscreen</button>
                         </div>
                       </div>
                       <div style={{flex:1,minHeight:420,position:"relative"}}>
                         <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={mapFilter}/>
-                        <button onClick={()=>setFs(true)} style={{position:"absolute",right:12,bottom:12,width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.92)",border:`1px solid ${P.border}`,cursor:"pointer",color:P.sub}}>⛶</button>
+                        <button onClick={()=>setFs(true)} aria-label="Open facility map fullscreen" title="Open fullscreen" style={{position:"absolute",right:14,bottom:14,zIndex:8,padding:"0 13px",height:38,borderRadius:12,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(10px)",border:`1px solid ${P.gold}45`,cursor:"pointer",color:P.goldDark,fontSize:11,fontWeight:900,fontFamily:P.fontBody,boxShadow:"0 12px 28px rgba(26,23,20,.12)",pointerEvents:"auto"}}>⛶ Fullscreen</button>
                       </div>
                     </div>
 
-                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    {!isDesktop&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
                       {detailCard||<div style={{padding:22,borderRadius:22,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 12px 36px rgba(17,24,39,.05)"}}><div style={{fontSize:10,fontWeight:900,letterSpacing:".14em",textTransform:"uppercase",color:P.gold,fontFamily:P.fontBody}}>Unit Control</div><div style={{fontSize:23,fontWeight:800,color:P.text,fontFamily:P.font,marginTop:5}}>Select a unit</div><div style={{fontSize:12,color:P.sub,lineHeight:1.55,fontFamily:P.fontBody,marginTop:6}}>Click any unit to review rent, tenant contact, balance, and status without leaving the command center.</div></div>}
-                      <div style={{padding:16,borderRadius:20,background:P.card,border:`1px solid ${P.border}`}}>
-                        <div style={{fontSize:12,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:10}}>Collections Queue</div>
-                        {units.filter(u=>u.status==="overdue").slice(0,4).map(u=>(<button key={u.id} onClick={()=>setSelId(u.id)} style={{width:"100%",padding:"10px 0",border:"none",borderTop:`1px solid ${P.border}`,background:"transparent",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",fontFamily:P.fontBody}}><span style={{fontSize:12,fontWeight:900,color:P.text}}>Unit {u.id}</span><span style={{fontSize:12,fontWeight:900,color:P.danger}}>${u.balance}</span></button>))}
-                        {!pastDueUnits&&<div style={{fontSize:12,color:P.sub,fontFamily:P.fontBody}}>No delinquent units in the current dataset.</div>}
-                      </div>
-                    </div>
+                    </div>)}
                   </div>
                 </div>
 
-                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <div style={{padding:18,borderRadius:22,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 12px 36px rgba(17,24,39,.05)"}}>
-                    <div style={{fontSize:13,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:12}}>Operating Snapshot</div>
+                <div style={{display:"flex",flexDirection:"column",gap:14,position:isDesktop?"sticky":"static",top:18}}>
+                  <div style={{padding:18,borderRadius:24,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 16px 42px rgba(17,24,39,.06)"}}>
+                    {detailCard||<div><div style={{fontSize:10,fontWeight:900,letterSpacing:".14em",textTransform:"uppercase",color:P.gold,fontFamily:P.fontBody}}>Unit Control</div><div style={{fontSize:23,fontWeight:800,color:P.text,fontFamily:P.font,marginTop:5}}>Select a unit</div><div style={{fontSize:12,color:P.sub,lineHeight:1.55,fontFamily:P.fontBody,marginTop:6}}>Click any unit to review rent, tenant contact, balance, and status.</div></div>}
+                  </div>
+                  <div style={{padding:16,borderRadius:22,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 12px 34px rgba(17,24,39,.04)"}}>
+                    <div style={{fontSize:13,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:10}}>Collections Queue</div>
+                    {units.filter(u=>u.status==="overdue").slice(0,4).map(u=>(<button key={u.id} onClick={()=>setSelId(u.id)} style={{width:"100%",padding:"10px 0",border:"none",borderTop:`1px solid ${P.border}`,background:"transparent",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",fontFamily:P.fontBody}}><span style={{fontSize:12,fontWeight:900,color:P.text}}>Unit {u.id}</span><span style={{fontSize:12,fontWeight:900,color:P.danger}}>${u.balance}</span></button>))}
+                    {!pastDueUnits&&<div style={{fontSize:12,color:P.sub,fontFamily:P.fontBody}}>No delinquent units in the current dataset.</div>}
+                  </div>
+                  <div style={{padding:18,borderRadius:24,background:"linear-gradient(180deg,#ffffff,#fffaf1)",border:`1px solid ${P.border}`,boxShadow:"0 18px 48px rgba(17,24,39,.06)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:12}}><div style={{fontSize:13,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>Operating Snapshot</div><div style={{fontSize:9,fontWeight:900,letterSpacing:".12em",textTransform:"uppercase",color:P.goldDark,fontFamily:P.fontBody}}>Live</div></div>
                     {[
                       ["Move-ins pending",reservedUnits,"Reserved units awaiting completion"],
                       ["Vacancy exposure",availableUnits,`${Math.round(availableUnits/units.length*100)}% of inventory open`],
@@ -1211,7 +1214,7 @@ export default function App(){
                     ].map(([label,value,desc])=>(<div key={label} style={{padding:"12px 0",borderTop:`1px solid ${P.border}`}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><span style={{fontSize:12,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>{label}</span><span style={{fontSize:18,fontWeight:900,color:label==="Collections risk"&&pastDueUnits?P.danger:P.text,fontFamily:P.fontBody}}>{value}</span></div><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody,marginTop:2}}>{desc}</div></div>))}
                   </div>
 
-                  <div style={{padding:18,borderRadius:22,background:P.card,border:`1px solid ${P.border}`}}>
+                  <div style={{padding:18,borderRadius:24,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 12px 34px rgba(17,24,39,.04)"}}>
                     <div style={{fontSize:13,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:12}}>Recent Account Activity</div>
                     {[
                       [`${reservedUnits} reservation${reservedUnits===1?"":"s"} awaiting move-in paperwork`,"Move-in pipeline"],
