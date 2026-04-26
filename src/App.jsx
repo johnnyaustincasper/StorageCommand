@@ -586,10 +586,14 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         const x2=Math.max(...groupUnits.map(u=>u.x+(u.w+visualGapClose)/2));
         const z1=Math.min(...groupUnits.map(u=>u.z-u.d/2));
         const z2=Math.max(...groupUnits.map(u=>u.z+u.d/2));
+        const pitchRise=(z2-z1)*0.125;
+        const ridgeZ=(z1+z2)/2;
         const corners=[
           [x1,-uhh,z1],[x2,-uhh,z1],[x2,uhh,z1],[x1,uhh,z1],
           [x1,-uhh,z2],[x2,-uhh,z2],[x2,uhh,z2],[x1,uhh,z2],
         ].map(([x,dy,z])=>project(x,unitH/2+dy,z,c));
+        const ridgeL=project(x1,unitH+pitchRise,ridgeZ,c);
+        const ridgeR=project(x2,unitH+pitchRise,ridgeZ,c);
 
         const sh=[[x1,0,z1],[x2,0,z1],[x2,0,z2],[x1,0,z2]].map(([x,,z])=>project(x+0.42,-0.025,z+0.28,c));
         ctx.save();ctx.filter="blur(7px)";ctx.beginPath();ctx.moveTo(sh[0].sx+4,sh[0].sy+4);sh.slice(1).forEach(pt=>ctx.lineTo(pt.sx+4,pt.sy+4));ctx.closePath();ctx.fillStyle="rgba(0,0,0,0.16)";ctx.fill();ctx.restore();
@@ -608,6 +612,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           }else ctx.fillStyle=rgba(shade(wall,br),0.95);
           ctx.fill();ctx.strokeStyle=isTop?"rgba(255,255,255,0.18)":"rgba(33,37,41,0.24)";ctx.lineWidth=isTop?0.9:1;ctx.stroke();
         };
+        const drawRoofPlane=(pts,br)=>drawFace(pts,br,true);
         if(!showFront)drawFace([corners[0],corners[1],corners[2],corners[3]],0.55,false);
         if(!showBack) drawFace([corners[5],corners[4],corners[7],corners[6]],0.45,false);
         if(!showLeft) drawFace([corners[4],corners[0],corners[3],corners[7]],0.50,false);
@@ -616,14 +621,18 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         if(showBack)  drawFace([corners[5],corners[4],corners[7],corners[6]],0.60,false);
         if(showLeft)  drawFace([corners[4],corners[0],corners[3],corners[7]],0.55,false);
         if(showRight) drawFace([corners[1],corners[5],corners[6],corners[2]],0.82,false);
-        drawFace([corners[3],corners[2],corners[6],corners[7]],1.0,true);
+        drawRoofPlane([corners[3],corners[2],ridgeR,ridgeL],1.02);
+        drawRoofPlane([ridgeL,ridgeR,corners[6],corners[7]],0.92);
 
-        ctx.strokeStyle="rgba(255,255,255,0.18)";ctx.lineWidth=0.7;
+        ctx.strokeStyle="rgba(255,255,255,0.24)";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(ridgeL.sx,ridgeL.sy);ctx.lineTo(ridgeR.sx,ridgeR.sy);ctx.stroke();
+        ctx.strokeStyle="rgba(255,255,255,0.16)";ctx.lineWidth=0.7;
         for(let i=1;i<=7;i++){
           const f=i/8;
           const a={sx:corners[3].sx+(corners[2].sx-corners[3].sx)*f,sy:corners[3].sy+(corners[2].sy-corners[3].sy)*f};
           const b={sx:corners[7].sx+(corners[6].sx-corners[7].sx)*f,sy:corners[7].sy+(corners[6].sy-corners[7].sy)*f};
-          ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke();
+          const r={sx:ridgeL.sx+(ridgeR.sx-ridgeL.sx)*f,sy:ridgeL.sy+(ridgeR.sy-ridgeL.sy)*f};
+          ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(r.sx,r.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke();
         }
       };
 
