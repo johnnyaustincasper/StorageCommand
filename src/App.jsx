@@ -1,4 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { Suspense, lazy, useState, useRef, useEffect, useCallback } from "react";
+
+const FacilityBuilder = lazy(() => import("./FacilityBuilder"));
 
 function useViewport(){
   const getWidth=()=>typeof window==="undefined"?1280:window.innerWidth;
@@ -17,7 +19,11 @@ function useViewport(){
   };
 }
 
-const FACILITY = { name: "Riverside Storage", address: "4521 S Memorial Dr, Tulsa, OK 74145" };
+const DEFAULT_FACILITY = { name: "Riverside Storage", address: "4521 S Memorial Dr, Tulsa, OK 74145" };
+const STORAGE_KEYS = {
+  facility: "storage-command.facility",
+  units: "storage-command.units",
+};
 const SIZES = [
   { key:"small", label:"5×5", sqft:25, price:49, desc:"Boxes & seasonal items", features:["Interior","Ground floor","24/7 access"] },
   { key:"medium", label:"10×10", sqft:100, price:99, desc:"1-bedroom apartment", features:["Drive-up","Ground floor","24/7","Wide doors"] },
@@ -41,6 +47,99 @@ const TENANTS=[
   {name:"Rachel Foster",phone:"(918) 555-0647",email:"rachel.f@email.com",since:"2024-05-22"},
   {name:"Tom Williams",phone:"(918) 555-0718",email:"tom.w@email.com",since:"2025-03-01"},
 ];
+
+const SIZE_DEFAULTS = {
+  "5×5": { key:"small", label:"5×5", sqft:25, price:49, desc:"Boxes & seasonal items", features:["Interior","Ground floor","24/7 access"], w:1.4, h:0.7, d:1.0 },
+  "10×10": { key:"medium", label:"10×10", sqft:100, price:99, desc:"1-bedroom apartment", features:["Drive-up","Ground floor","24/7","Wide doors"], w:1.4, h:1.1, d:1.0 },
+  "10×20": { key:"large", label:"10×20", sqft:200, price:169, desc:"2-3 bedroom home", features:["Drive-up","12ft ceiling","24/7","Wide doors"], w:1.4, h:1.6, d:1.0 },
+  "10×30": { key:"xl", label:"10×30", sqft:300, price:249, desc:"Commercial / multi-vehicle", features:["Drive-up","14ft ceiling","24/7","Forklift"], w:1.4, h:2.2, d:1.0 },
+};
+
+const getSizeDefaults=(size)=>SIZE_DEFAULTS[size]||SIZE_DEFAULTS["10×10"];
+
+function createLayoutScaler(builderUnits){
+  const pts=builderUnits.map((u)=>u.center).filter((center)=>Array.isArray(center)&&center.length===2);
+  if(!pts.length)return null;
+  const lngs=pts.map(([lng])=>lng);
+  const lats=pts.map(([,lat])=>lat);
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const spanLng=Math.max(maxLng-minLng,0.0002);
+  const spanLat=Math.max(maxLat-minLat,0.0002);
+  return(center,index)=>{
+    if(!Array.isArray(center)||center.length!==2){
+      const col=index%6;
+      const row=Math.floor(index/6);
+      return { x:-12+col*4.6, z:-8+row*3.4 };
+    }
+    const [lng,lat]=center;
+    const x=((lng-minLng)/spanLng-0.5)*28;
+    const z=(0.5-(lat-minLat)/spanLat)*18;
+    return { x,z };
+  };
+}
+
+function normalizeAppUnit(unit,index,placeBuilderUnit){
+  if(unit&&typeof unit.x==="number"&&typeof unit.z==="number"){
+    const sizeDefaults=getSizeDefaults(unit.label);
+    return {
+      ...sizeDefaults,
+      ...unit,
+      price:Number(unit.price ?? sizeDefaults.price),
+      sqft:Number(unit.sqft ?? sizeDefaults.sqft),
+      features:Array.isArray(unit.features)&&unit.features.length?unit.features:sizeDefaults.features,
+      desc:unit.desc||sizeDefaults.desc,
+      w:Number(unit.w ?? sizeDefaults.w),
+      h:Number(unit.h ?? sizeDefaults.h),
+      d:Number(unit.d ?? sizeDefaults.d),
+    };
+  }
+
+  const sizeDefaults=getSizeDefaults(unit?.size || unit?.label);
+  const pos=placeBuilderUnit?.(unit?.center,index) || { x:-12+(index%6)*4.6, z:-8+Math.floor(index/6)*3.4 };
+  return {
+    id:unit?.id || `CUSTOM-${String(index+1).padStart(2,"0")}`,
+    type:sizeDefaults.key,
+    status:unit?.status || "available",
+    label:unit?.size || sizeDefaults.label,
+    sqft:sizeDefaults.sqft,
+    price:Number(unit?.price ?? sizeDefaults.price),
+    desc:sizeDefaults.desc,
+    features:sizeDefaults.features,
+    w:sizeDefaults.w,
+    h:sizeDefaults.h,
+    d:sizeDefaults.d,
+    tenant:null,
+    balance:0,
+    x:pos.x,
+    y:0,
+    z:pos.z,
+    sourceCenter:unit?.center || null,
+    geometry:unit?.geometry || null,
+    builderLabel:unit?.label || "",
+  };
+}
+
+function normalizeUnits(units,fallback=ALL_UNITS){
+  if(!Array.isArray(units)||!units.length)return fallback;
+  const hasBuilderUnits=units.some((unit)=>typeof unit?.x!=="number"||typeof unit?.z!=="number");
+  const placeBuilderUnit=hasBuilderUnits?createLayoutScaler(units):null;
+  return units.map((unit,index)=>normalizeAppUnit(unit,index,placeBuilderUnit));
+}
+
+function toBuilderUnits(units){
+  return normalizeUnits(units,[]).map((unit,index)=>({
+    id:unit.id,
+    label:unit.builderLabel || unit.id || `Unit ${index+1}`,
+    size:unit.label || "10×10",
+    price:String(unit.price ?? ""),
+    status:unit.status || "available",
+    center:Array.isArray(unit.sourceCenter)&&unit.sourceCenter.length===2
+      ? unit.sourceCenter
+      : [-95.9928 + unit.x * 0.00008, 36.154 - unit.z * 0.00012],
+    geometry:unit.geometry || null,
+  }));
+}
 
 function genUnits(){
   const u=[];
@@ -90,6 +189,15 @@ function genUnits(){
 }
 
 const ALL_UNITS=genUnits();
+const readStoredJson=(key,fallback)=>{
+  if(typeof window==="undefined")return fallback;
+  try{
+    const raw=window.localStorage.getItem(key);
+    return raw?JSON.parse(raw):fallback;
+  }catch{
+    return fallback;
+  }
+};
 const genCode=()=>Math.floor(1000+Math.random()*9000)+String.fromCharCode(65+Math.floor(Math.random()*26));
 const P={
   bg:"#fefefe",card:"#ffffff",border:"#f0ece4",borderLight:"#f7f4ef",
@@ -99,6 +207,8 @@ const P={
   font:"'Cormorant Garamond', serif",fontBody:"'Nunito', sans-serif",radius:12,
 };
 const hx=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const rgba=(rgb,a)=>`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+const shade=(rgb,m)=>rgb.map(v=>Math.max(0,Math.min(255,Math.round(v*m))));
 
 // ═══════════════════════════════════════════════
 // CANVAS 3D RENDERER
@@ -106,8 +216,8 @@ const hx=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slic
 function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const canvasRef = useRef(null);
   const projRef = useRef([]);
-  const camRef = useRef({ angle:30, tiltX:-1.1, cx:1, cz:-3, zoom:13, dist:30 });
-  const targetRef = useRef({ angle:30, tiltX:-1.1, cx:1, cz:-3, zoom:13 });
+  const camRef = useRef({ angle:34, tiltX:-1.0, cx:1, cz:-3, zoom:15, dist:34 });
+  const targetRef = useRef({ angle:34, tiltX:-1.0, cx:1, cz:-3, zoom:15 });
   const selRef = useRef(null);
   const filterRef = useRef(null);
   const gestureRef = useRef({ active:false, type:null, sx:0, sy:0, moved:false });
@@ -117,8 +227,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const lastPinch = useRef({dist:0,angle:0,mx:0,my:0});
 
   // Critters state — initialized once
-  const crittersRef = useRef(null);
-  if(!crittersRef.current){
+  const [critters] = useState(()=>{
     const mkBunny=()=>({
       type:"bunny", x:(Math.random()-0.5)*32, z:(Math.random()-0.5)*20,
       tx:(Math.random()-0.5)*32, tz:(Math.random()-0.5)*20,
@@ -135,12 +244,12 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       speed:18+Math.random()*12, y:3+Math.random()*2,
       wing:0, wait:Math.random()*12,
     });
-    crittersRef.current=[
+    return [
       mkBunny(),mkBunny(),mkBunny(),
       mkSquirrel(),mkSquirrel(),
       mkBird(),mkBird(),
     ];
-  }
+  });
 
   // PC right-click rotate
   const rightDragRef = useRef({active:false,lx:0,ly:0});
@@ -166,7 +275,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const u=units.find(u=>u.id===selId);
       if(u){t.cx=u.x;t.cz=u.z;t.zoom=60;t.tiltX=-0.6;}
     }else{
-      t.cx=1;t.cz=-3;t.zoom=13;t.tiltX=-1.1;
+      t.cx=1;t.cz=-3;t.zoom=15;t.tiltX=-1.0;
     }
   },[selId,units]);
 
@@ -303,28 +412,46 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const W=rect.width, H=rect.height;
       c.scx=W/2; c.scy=H/2+H*0.06; c.zm=c.zoom;
 
-      // ── SKY ──
+      // ── ENVIRONMENT ──
       const sky=ctx.createLinearGradient(0,0,0,H);
-      sky.addColorStop(0,"#c9e8f5"); sky.addColorStop(0.7,"#e8f4fb"); sky.addColorStop(1,"#eef7e8");
+      sky.addColorStop(0,"#d9e3ea"); sky.addColorStop(0.62,"#edf1f3"); sky.addColorStop(1,"#f5f3ee");
       ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
 
-      // ── GRASS (full ground) ──
+      const sun=ctx.createRadialGradient(W*0.78,H*0.12,0,W*0.78,H*0.12,W*0.42);
+      sun.addColorStop(0,"rgba(255,255,255,0.52)");sun.addColorStop(0.4,"rgba(255,255,255,0.16)");sun.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle=sun;ctx.fillRect(0,0,W,H*0.65);
+
+      // ── GROUNDS ──
       const gP=[[-36,-26],[36,-26],[36,26],[-36,26]].map(([gx,gz])=>project(gx,-0.05,gz,c));
       ctx.beginPath();ctx.moveTo(gP[0].sx,gP[0].sy);gP.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
       const grassG=ctx.createLinearGradient(0,gP[0].sy,0,gP[2].sy);
-      grassG.addColorStop(0,"#7ec850");grassG.addColorStop(1,"#5fa832");
+      grassG.addColorStop(0,"#8b9a73");grassG.addColorStop(1,"#667654");
       ctx.fillStyle=grassG;ctx.fill();
+
+      const pad=[[-21,-14.3],[23,-14.3],[23,5.6],[-21,5.6]].map(([x,z])=>project(x,-0.04,z,c));
+      ctx.beginPath();ctx.moveTo(pad[0].sx,pad[0].sy);pad.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
+      ctx.fillStyle="rgba(70,73,72,0.18)";ctx.fill();
 
       // ── ROAD SYSTEM ──
       // 3 buildings: A(z=-11.5 to -6.5), B(z=-4.5 to 0.5), C(z=2.5 to 7.5)
       // Units span x=-14.6 to +19.4
-      const road="#c4b896";
-      const roadEdge="rgba(180,168,138,0.5)";
+      const road="#3b3d3d";
+      const roadEdge="rgba(255,255,255,0.16)";
       const drawRoad=(pts)=>{
         ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);
         pts.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-        ctx.fillStyle=road;ctx.fill();
-        ctx.strokeStyle=roadEdge;ctx.lineWidth=0.7;ctx.stroke();
+        const rg=ctx.createLinearGradient(pts[0].sx,pts[0].sy,pts[2].sx,pts[2].sy);
+        rg.addColorStop(0,"#474a49");rg.addColorStop(0.55,road);rg.addColorStop(1,"#303232");
+        ctx.fillStyle=rg;ctx.fill();
+        ctx.strokeStyle=roadEdge;ctx.lineWidth=1;ctx.stroke();
+        ctx.save();ctx.clip();
+        ctx.strokeStyle="rgba(255,255,255,0.035)";ctx.lineWidth=0.6;
+        for(let i=0;i<14;i++){
+          const a=pts[0], b=pts[2];
+          const x=a.sx+(b.sx-a.sx)*(i/13);
+          ctx.beginPath();ctx.moveTo(x-22,a.sy-80);ctx.lineTo(x+28,b.sy+80);ctx.stroke();
+        }
+        ctx.restore();
       };
       // Perimeter top (above Bldg A, z=-13 to -12)
       drawRoad([[-19,-13],[21,-13],[21,-12],[-19,-12]].map(([x,z])=>project(x,-0.02,z,c)));
@@ -344,7 +471,9 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const entryRoad=[[1,4.5],[5,4.5],[5,9],[1,9]].map(([x,z])=>project(x,-0.02,z,c));
       ctx.beginPath();ctx.moveTo(entryRoad[0].sx,entryRoad[0].sy);
       entryRoad.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-      ctx.fillStyle=road;ctx.fill();
+      const erG=ctx.createLinearGradient(entryRoad[0].sx,entryRoad[0].sy,entryRoad[2].sx,entryRoad[2].sy);
+      erG.addColorStop(0,"#4a4d4c");erG.addColorStop(1,"#303232");ctx.fillStyle=erG;ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,0.14)";ctx.lineWidth=1;ctx.stroke();
 
       // ── BLACK FENCE ──
       // Fence runs along perimeter: x=-19 to +21, z=-13 to +4.5
@@ -408,12 +537,12 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const gArmEnd=project(1+gateSlide,fenceH*0.9,4.5,c);
       const gArmStart=project(1,fenceH*0.9,4.5,c);
       ctx.beginPath();ctx.moveTo(gArmStart.sx,gArmStart.sy);ctx.lineTo(gArmEnd.sx,gArmEnd.sy);
-      ctx.strokeStyle=gateOpen>0.5?"#e63939":"#e63939";
+      ctx.strokeStyle="#9b2f2f";
       ctx.lineWidth=Math.max(2,gArmStart.sc*c.zm*0.09);ctx.stroke();
       // Gate label
       const gMid=project(3,fenceH*1.6,4.5,c);
       ctx.font=`700 ${Math.max(6,gMid.sc*c.zm*0.12)}px 'Nunito',sans-serif`;
-      ctx.fillStyle="rgba(220,50,50,0.85)";ctx.textAlign="center";
+      ctx.fillStyle="rgba(90,74,58,0.7)";ctx.textAlign="center";
       ctx.fillText("GATE",gMid.sx,gMid.sy);
 
       // ── BUILDING LABELS ──
@@ -443,10 +572,13 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         const isSel=unit.id===curSel;
         const isDim=(curFilter&&unit.status!==curFilter);
         const st=STATUS[unit.status];
-        const [cr,cg,cb]=hx(st.color);
-        const alpha=isDim?0.1:isSel?1.0:0.78;
-        const unitH=isSel?unit.h*1.15:unit.h;
+        const accent=hx(st.color);
+        const alpha=isDim?0.18:isSel?1.0:0.92;
+        const unitH=isSel?unit.h*1.04:unit.h;
         const uhh=unitH/2;
+        const wall=[184,181,171];
+        const roof=[86,88,84];
+        const door=[124,128,124];
 
         const corners=[
           [-hw,-uhh,-hd],[hw,-uhh,-hd],[hw,uhh,-hd],[-hw,uhh,-hd],
@@ -454,25 +586,16 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         ].map(([dx,dy,dz])=>project(unit.x+dx,unitH/2+dy,unit.z+dz,c));
 
         if(!isDim){
-          const sh=[[-hw,0,-hd],[hw,0,-hd],[hw,0,hd],[-hw,0,hd]].map(([dx,,dz])=>project(unit.x+dx+0.15,-0.02,unit.z+dz+0.15,c));
-          ctx.save();ctx.filter="blur(4px)";ctx.beginPath();ctx.moveTo(sh[0].sx+2,sh[0].sy+2);sh.slice(1).forEach(p=>ctx.lineTo(p.sx+2,p.sy+2));ctx.closePath();
-          ctx.fillStyle=isSel?`${st.color}25`:"rgba(0,0,0,0.07)";ctx.fill();ctx.restore();
+          const sh=[[-hw,0,-hd],[hw,0,-hd],[hw,0,hd],[-hw,0,hd]].map(([dx,,dz])=>project(unit.x+dx+0.32,-0.025,unit.z+dz+0.24,c));
+          ctx.save();ctx.filter="blur(5px)";ctx.beginPath();ctx.moveTo(sh[0].sx+3,sh[0].sy+3);sh.slice(1).forEach(p=>ctx.lineTo(p.sx+3,p.sy+3));ctx.closePath();
+          ctx.fillStyle=isSel?"rgba(31,41,55,0.2)":"rgba(0,0,0,0.14)";ctx.fill();ctx.restore();
         }
 
-        if(unit.status==="available"&&!isDim&&!isSel){
-          const pulse=0.5+Math.sin(t*1.6+unit.x*0.3)*0.3;
-          const gc=project(unit.x,unitH*0.6,unit.z,c);
-          const gr=Math.max(10,corners[3].sc*c.zm*0.18);
-          const glow=ctx.createRadialGradient(gc.sx,gc.sy,0,gc.sx,gc.sy,gr);
-          glow.addColorStop(0,`rgba(34,197,94,${0.15*pulse})`);glow.addColorStop(1,"rgba(34,197,94,0)");
-          ctx.fillStyle=glow;ctx.fillRect(gc.sx-gr,gc.sy-gr,gr*2,gr*2);
-        }
         if(isSel){
-          const sp=0.6+Math.sin(t*2.5)*0.4;
-          const gc=project(unit.x,unitH,unit.z,c);
-          const gr=Math.max(18,corners[3].sc*c.zm*0.3);
+          const gc=project(unit.x,0.04,unit.z,c);
+          const gr=Math.max(22,corners[3].sc*c.zm*0.42);
           const glow=ctx.createRadialGradient(gc.sx,gc.sy,0,gc.sx,gc.sy,gr);
-          glow.addColorStop(0,`${st.color}${Math.round(55*sp).toString(16).padStart(2,'0')}`);glow.addColorStop(1,`${st.color}00`);
+          glow.addColorStop(0,"rgba(201,168,76,0.28)");glow.addColorStop(0.45,"rgba(201,168,76,0.12)");glow.addColorStop(1,"rgba(201,168,76,0)");
           ctx.fillStyle=glow;ctx.fillRect(gc.sx-gr,gc.sy-gr,gr*2,gr*2);
         }
 
@@ -487,15 +610,16 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);pts.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
           if(isTop&&!isDim){
             const tg=ctx.createLinearGradient(pts[0].sx,pts[0].sy,pts[2].sx,pts[2].sy);
-            tg.addColorStop(0,`rgba(${Math.round(cr*br)},${Math.round(cg*br)},${Math.round(cb*br)},${alpha})`);
-            tg.addColorStop(1,`rgba(${Math.round(cr*br*0.85)},${Math.round(cg*br*0.85)},${Math.round(cb*br*0.85)},${alpha})`);
+            tg.addColorStop(0,rgba(shade(roof,br*1.08),alpha));
+            tg.addColorStop(0.5,rgba(shade(roof,br*0.96),alpha));
+            tg.addColorStop(1,rgba(shade(roof,br*0.78),alpha));
             ctx.fillStyle=tg;
           }else{
-            ctx.fillStyle=`rgba(${Math.round(cr*br)},${Math.round(cg*br)},${Math.round(cb*br)},${alpha})`;
+            ctx.fillStyle=rgba(shade(wall,br),alpha);
           }
           ctx.fill();
-          if(isSel){ctx.strokeStyle="rgba(255,255,255,0.85)";ctx.lineWidth=1.5;ctx.stroke();}
-          else if(!isDim){ctx.strokeStyle=isTop?"rgba(255,255,255,0.15)":"rgba(0,0,0,0.18)";ctx.lineWidth=isTop?0.6:0.8;ctx.stroke();}
+          if(isSel){ctx.strokeStyle="rgba(255,255,255,0.92)";ctx.lineWidth=1.2;ctx.stroke();ctx.strokeStyle="rgba(201,168,76,0.72)";ctx.lineWidth=2.1;ctx.stroke();}
+          else if(!isDim){ctx.strokeStyle=isTop?"rgba(255,255,255,0.13)":"rgba(33,37,41,0.32)";ctx.lineWidth=isTop?0.7:0.9;ctx.stroke();}
         };
 
         if(!showFront)drawFace([corners[0],corners[1],corners[2],corners[3]],0.55,false);
@@ -508,11 +632,34 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         if(showRight) drawFace([corners[1],corners[5],corners[6],corners[2]],0.82,false);
         drawFace([corners[3],corners[2],corners[6],corners[7]],1.0,true);
 
-        if(!isDim&&unit.status==="available"){
-          const d1=project(unit.x-hw*0.5,0.02,unit.z-hd,c),d2=project(unit.x+hw*0.5,0.02,unit.z-hd,c);
-          const d3=project(unit.x-hw*0.5,unitH*0.5,unit.z-hd,c),d4=project(unit.x+hw*0.5,unitH*0.5,unit.z-hd,c);
-          ctx.strokeStyle="rgba(255,255,255,0.1)";ctx.lineWidth=0.5;
-          for(let dl=0;dl<=3;dl++){const f=dl/3;ctx.beginPath();ctx.moveTo(d1.sx+(d3.sx-d1.sx)*f,d1.sy+(d3.sy-d1.sy)*f);ctx.lineTo(d2.sx+(d4.sx-d2.sx)*f,d2.sy+(d4.sy-d2.sy)*f);ctx.stroke();}
+        if(!isDim){
+          // Roof seams / coping so the units feel like real metal buildings.
+          ctx.strokeStyle="rgba(255,255,255,0.16)";ctx.lineWidth=0.7;
+          for(let i=1;i<=3;i++){
+            const f=i/4;
+            const a={sx:corners[3].sx+(corners[2].sx-corners[3].sx)*f,sy:corners[3].sy+(corners[2].sy-corners[3].sy)*f};
+            const b={sx:corners[7].sx+(corners[6].sx-corners[7].sx)*f,sy:corners[7].sy+(corners[6].sy-corners[7].sy)*f};
+            ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke();
+          }
+          ctx.strokeStyle="rgba(0,0,0,0.22)";ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(corners[3].sx,corners[3].sy);ctx.lineTo(corners[2].sx,corners[2].sy);ctx.stroke();
+
+          // Roll-up door on the drive side with a small status strip instead of toy-colored buildings.
+          const d1=project(unit.x-hw*0.46,0.03,unit.z-hd-0.012,c),d2=project(unit.x+hw*0.46,0.03,unit.z-hd-0.012,c);
+          const d3=project(unit.x-hw*0.46,unitH*0.58,unit.z-hd-0.012,c),d4=project(unit.x+hw*0.46,unitH*0.58,unit.z-hd-0.012,c);
+          ctx.beginPath();ctx.moveTo(d1.sx,d1.sy);ctx.lineTo(d2.sx,d2.sy);ctx.lineTo(d4.sx,d4.sy);ctx.lineTo(d3.sx,d3.sy);ctx.closePath();
+          const dg=ctx.createLinearGradient(d1.sx,d1.sy,d4.sx,d4.sy);
+          dg.addColorStop(0,rgba(shade(door,0.82),0.9));dg.addColorStop(0.55,rgba(shade(door,1.03),0.92));dg.addColorStop(1,rgba(shade(door,0.72),0.9));
+          ctx.fillStyle=dg;ctx.fill();
+          ctx.strokeStyle="rgba(31,41,55,0.34)";ctx.lineWidth=0.8;ctx.stroke();
+          ctx.strokeStyle="rgba(255,255,255,0.18)";ctx.lineWidth=0.55;
+          for(let dl=1;dl<=5;dl++){
+            const f=dl/6;
+            ctx.beginPath();ctx.moveTo(d1.sx+(d3.sx-d1.sx)*f,d1.sy+(d3.sy-d1.sy)*f);ctx.lineTo(d2.sx+(d4.sx-d2.sx)*f,d2.sy+(d4.sy-d2.sy)*f);ctx.stroke();
+          }
+          const a1=project(unit.x-hw*0.46,unitH*0.61,unit.z-hd-0.018,c),a2=project(unit.x+hw*0.46,unitH*0.61,unit.z-hd-0.018,c);
+          ctx.beginPath();ctx.moveTo(a1.sx,a1.sy);ctx.lineTo(a2.sx,a2.sy);
+          ctx.strokeStyle=rgba(accent,isSel?0.95:0.55);ctx.lineWidth=Math.max(1,a1.sc*c.zm*0.035);ctx.stroke();
         }
 
         if(!isDim){
@@ -521,9 +668,9 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           if(ls>10){
             const fs=Math.max(6,Math.min(14,ls*0.13));
             ctx.font=`800 ${fs}px 'Nunito',sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";
-            ctx.fillStyle="rgba(0,0,0,0.2)";ctx.fillText(unit.id,tc.sx+0.5,tc.sy+0.5);
-            ctx.fillStyle=isSel?"#fff":"rgba(255,255,255,0.92)";ctx.fillText(unit.id,tc.sx,tc.sy);
-            if(ls>22){ctx.font=`700 ${Math.max(5,fs*0.55)}px 'Nunito',sans-serif`;ctx.fillStyle=isSel?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.5)";ctx.fillText(`$${unit.price}/mo`,tc.sx,tc.sy+fs*0.9);}
+            ctx.fillStyle="rgba(255,255,255,0.38)";ctx.fillText(unit.id,tc.sx+0.5,tc.sy+0.5);
+            ctx.fillStyle=isSel?"#f8fafc":"rgba(28,31,33,0.72)";ctx.fillText(unit.id,tc.sx,tc.sy);
+            if(ls>22){ctx.font=`700 ${Math.max(5,fs*0.55)}px 'Nunito',sans-serif`;ctx.fillStyle=isSel?"rgba(255,255,255,0.78)":"rgba(28,31,33,0.46)";ctx.fillText(`$${unit.price}/mo`,tc.sx,tc.sy+fs*0.9);}
           }
         }
 
@@ -533,7 +680,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       projRef.current=projected;
 
       // ── CRITTERS ──
-      crittersRef.current.forEach(cr=>{
+      critters.forEach(cr=>{
         if(cr.type==="bunny"){
           if(!cr.hopping){
             cr.wait-=dt;
@@ -659,7 +806,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
     };
     render(performance.now());
     return()=>cancelAnimationFrame(frame);
-  },[units,project]);
+  },[critters,units,project]);
 
   return(
     <div style={{width:"100%",height:"100%",position:"relative"}}>
@@ -793,13 +940,36 @@ export default function App(){
   const { isTablet, isDesktop } = useViewport();
   const [mode,setMode]=useState(null);
   const [step,setStep]=useState(0);
-  const [units]=useState(ALL_UNITS);
+  const [facility,setFacility]=useState(()=>readStoredJson(STORAGE_KEYS.facility,DEFAULT_FACILITY));
+  const [units,setUnits]=useState(()=>normalizeUnits(readStoredJson(STORAGE_KEYS.units,ALL_UNITS)));
   const [selId,setSelId]=useState(null);
   const [sf,setSf]=useState(null);
   const [form,setForm]=useState({});
   const [agreed,setAgreed]=useState(false);
   const [fs,setFs]=useState(false);
   const sel=selId?units.find(u=>u.id===selId):null;
+
+  useEffect(()=>{
+    if(typeof window!=="undefined")window.localStorage.setItem(STORAGE_KEYS.facility,JSON.stringify(facility));
+  },[facility]);
+
+  useEffect(()=>{
+    if(typeof window!=="undefined")window.localStorage.setItem(STORAGE_KEYS.units,JSON.stringify(units));
+  },[units]);
+
+  const openBuilder=()=>setMode("builder");
+  const saveBuilder=({units:nextUnits,address:nextAddress})=>{
+    setUnits(normalizeUnits(nextUnits));
+    setFacility(prev=>({...prev,address:(nextAddress||prev.address).trim()}));
+    setMode("setup");
+  };
+  const resetDemo=()=>{
+    setFacility(DEFAULT_FACILITY);
+    setUnits(ALL_UNITS);
+    setSelId(null);
+    setSf(null);
+  };
+
   const ok=()=>{
     if(step===0)return!!sel&&sel.status==="available";
     if(step===1)return form.first&&form.last&&form.email&&form.phone;
@@ -819,8 +989,8 @@ export default function App(){
           <button onClick={()=>setMode("setup")} style={{position:"absolute",top:20,right:20,width:40,height:40,borderRadius:10,border:`1px solid ${P.border}`,background:P.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,color:P.muted}}>⚙️</button>
           <div style={{width:72,height:72,borderRadius:18,background:`linear-gradient(135deg,${P.gold},#d4a843)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,color:"#fff",boxShadow:`0 8px 28px ${P.gold}30`,marginBottom:18}}>SC</div>
           <div style={{fontSize:42,fontWeight:700,color:P.text,fontFamily:P.font,letterSpacing:"-0.03em"}}>StorageCommand</div>
-          <div style={{fontSize:17,color:P.muted,marginTop:8}}>{FACILITY.name}</div>
-          <div style={{fontSize:13,color:P.sub,marginTop:4,maxWidth:480}}>{FACILITY.address}</div>
+          <div style={{fontSize:17,color:P.muted,marginTop:8}}>{facility.name}</div>
+          <div style={{fontSize:13,color:P.sub,marginTop:4,maxWidth:480}}>{facility.address}</div>
           <div style={{display:"flex",gap:24,marginTop:28,flexWrap:"wrap"}}>
             {[
               {v:units.filter(u=>u.status==="available").length,l:"Available",c:STATUS.available.color},
@@ -841,6 +1011,25 @@ export default function App(){
     </div>
   );
 
+  // ── BUILDER ──
+  if(mode==="builder")return(
+    <div style={{width:"100%",height:"100vh",background:P.bg,fontFamily:P.fontBody}}>
+      {fonts}
+      <Suspense fallback={
+        <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:P.sub,fontSize:14}}>
+          Loading facility builder...
+        </div>
+      }>
+        <FacilityBuilder
+          existingUnits={toBuilderUnits(units)}
+          facilityAddress={facility.address}
+          onSave={saveBuilder}
+          onBack={()=>setMode("setup")}
+        />
+      </Suspense>
+    </div>
+  );
+
   // ── SETUP ──
   if(mode==="setup")return(
     <div style={{width:"100%",minHeight:"100vh",background:P.bg,fontFamily:P.fontBody,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -855,33 +1044,38 @@ export default function App(){
       <div style={{flex:1,overflowY:"auto",padding:isTablet?"32px":"20px 16px"}}>
         <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Setup & Configuration</div>
         {[
-          {icon:"🛰️",title:"AI Satellite Scan",desc:"Upload an overhead photo and AI auto-generates your facility layout",tag:"Powered by Haiku",tagColor:P.gold},
-          {icon:"🏗️",title:"Manual Builder",desc:"Configure buildings, rows, and units step by step",tag:"Full Control",tagColor:P.blue},
-          {icon:"🎨",title:"Branding & Theme",desc:"Set your facility name, logo, colors, and contact info",tag:"Customize",tagColor:P.success},
-          {icon:"💳",title:"Billing Setup",desc:"Connect Stripe for automated monthly payments",tag:"Coming Soon",tagColor:P.muted},
-          {icon:"🔐",title:"Smart Lock Integration",desc:"Connect Nokē, Janus, or DoorKing for automated access codes",tag:"Coming Soon",tagColor:P.muted},
-          {icon:"🤖",title:"AI Assistant Settings",desc:"Configure your facility's Haiku-powered AI copilot",tag:"Coming Soon",tagColor:P.muted},
-        ].map(({icon,title,desc,tag,tagColor})=>(
-          <div key={title} style={{padding:16,borderRadius:P.radius,border:`1px solid ${P.border}`,background:P.card,marginBottom:10,cursor:"pointer",display:"flex",gap:14,alignItems:"flex-start"}}>
+          {icon:"📐",title:"Starter Layout Draft",desc:"Open the builder and place a simple template around the current map center, then adjust each unit manually.",tag:"Template Based",tagColor:P.gold,action:openBuilder,cta:"Open Builder"},
+          {icon:"🏗️",title:"Manual Builder",desc:"Configure buildings, rows, and units step by step on a live map.",tag:"Full Control",tagColor:P.blue,action:openBuilder,cta:"Launch Manual Builder"},
+          {icon:"🎨",title:"Branding & Theme",desc:"Branding controls are next, but your facility address already saves from the builder.",tag:"In Progress",tagColor:P.success},
+          {icon:"💳",title:"Billing Setup",desc:"Stripe connection is not wired up yet. This demo does not process live payments today.",tag:"Not Yet Connected",tagColor:P.muted},
+          {icon:"🔐",title:"Smart Lock Integration",desc:"Device integrations are planned, but access codes here are still local demo values.",tag:"Planned",tagColor:P.muted},
+          {icon:"🤝",title:"Operations Assistant",desc:"No live AI copilot is connected yet. We removed the fake setup flow until there is a real backend behind it.",tag:"Honest Placeholder",tagColor:P.muted},
+        ].map(({icon,title,desc,tag,tagColor,action,cta})=>(
+          <button key={title} onClick={action} disabled={!action} style={{width:"100%",padding:16,borderRadius:P.radius,border:`1px solid ${action?tagColor+"35":P.border}`,background:P.card,marginBottom:10,cursor:action?"pointer":"default",display:"flex",gap:14,alignItems:"flex-start",textAlign:"left"}}>
             <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{icon}</div>
             <div style={{flex:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2,flexWrap:"wrap"}}>
                 <span style={{fontSize:15,fontWeight:700,color:P.text,fontFamily:P.font}}>{title}</span>
                 <span style={{padding:"1px 6px",borderRadius:4,background:tagColor+"15",color:tagColor,fontSize:8,fontWeight:700,fontFamily:P.fontBody}}>{tag}</span>
               </div>
               <div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody,lineHeight:1.4}}>{desc}</div>
+              {cta&&<div style={{fontSize:10,fontWeight:800,color:tagColor,fontFamily:P.fontBody,letterSpacing:"0.06em",marginTop:10}}>{cta} →</div>}
             </div>
-          </div>
+          </button>
         ))}
         <div style={{marginTop:16,padding:16,borderRadius:P.radius,background:P.goldLight,border:`1px solid ${P.gold}20`}}>
           <div style={{fontSize:10,fontWeight:700,color:P.goldDark,fontFamily:P.fontBody,letterSpacing:"0.06em",marginBottom:8}}>CURRENT FACILITY</div>
-          <div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>{FACILITY.name}</div>
-          <div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody}}>{FACILITY.address}</div>
+          <div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>{facility.name}</div>
+          <div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody}}>{facility.address}</div>
           <div style={{display:"flex",gap:16,marginTop:10}}>
             <div><div style={{fontSize:18,fontWeight:700,color:P.gold,fontFamily:P.font}}>{units.length}</div><div style={{fontSize:8,color:P.muted,fontFamily:P.fontBody}}>Units</div></div>
             <div><div style={{fontSize:18,fontWeight:700,color:P.success,fontFamily:P.font}}>{units.filter(u=>u.status==="available").length}</div><div style={{fontSize:8,color:P.muted,fontFamily:P.fontBody}}>Available</div></div>
             <div><div style={{fontSize:18,fontWeight:700,color:P.danger,fontFamily:P.font}}>{units.filter(u=>u.status==="overdue").length}</div><div style={{fontSize:8,color:P.muted,fontFamily:P.fontBody}}>Past Due</div></div>
-            <div><div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font}}>${units.filter(u=>u.status!=="available"&&u.status!=="maintenance").reduce((s,u)=>s+u.price,0).toLocaleString()}</div><div style={{fontSize:8,color:P.muted,fontFamily:P.fontBody}}>Monthly Rev</div></div>
+            <div><div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font}}>${units.filter(u=>u.status!=="available"&&u.status!=="maintenance").reduce((s,u)=>s+Number(u.price||0),0).toLocaleString()}</div><div style={{fontSize:8,color:P.muted,fontFamily:P.fontBody}}>Monthly Rev</div></div>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
+            <button onClick={openBuilder} style={{padding:"10px 14px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${P.gold},#b8943f)`,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody}}>Open Facility Builder</button>
+            <button onClick={resetDemo} style={{padding:"10px 14px",borderRadius:10,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>Reset Demo Data</button>
           </div>
         </div>
       </div>
@@ -905,25 +1099,48 @@ export default function App(){
   );
 
   // ── CUSTOMER / OWNER FLOW ──
+  const occupancy=Math.round(units.filter(u=>u.status!=="available").length/units.length*100);
+  const monthlyRevenue=units.filter(u=>u.status!=="available"&&u.status!=="maintenance").reduce((s,u)=>s+Number(u.price||0),0);
+  const customerStatuses=["available","reserved"];
+  const shownStatuses=mode==="customer"?customerStatuses:Object.keys(STATUS);
+  const mapFilter=mode==="customer"?(sf || "available"):sf;
+
   const detailCard=sel?(
-    <div key={sel.id} style={{padding:isTablet?"24px":"12px 16px",flexShrink:0,borderTop:isTablet?"none":`1px solid ${P.border}`,borderLeft:isTablet?`1px solid ${P.border}`:"none",background:P.card,height:"100%",overflowY:"auto"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+    <div key={sel.id} style={{padding:isTablet?"24px":"16px",flexShrink:0,borderTop:isTablet?"none":`1px solid ${P.border}`,borderLeft:isTablet?`1px solid ${P.border}`:"none",background:`linear-gradient(180deg,${P.card},#fffaf1)`,height:"100%",overflowY:"auto",boxShadow:isTablet?"inset 1px 0 0 rgba(255,255,255,.7)":"0 -18px 50px rgba(26,23,20,.08)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14}}>
         <div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-            <span style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font}}>Unit {sel.id}</span>
-            <span style={{padding:"2px 8px",borderRadius:4,background:STATUS[sel.status].color+"18",color:STATUS[sel.status].color,fontSize:9,fontWeight:700,fontFamily:P.fontBody}}>{STATUS[sel.status].label}</span>
-          </div>
-          <div style={{fontSize:12,color:P.sub,fontFamily:P.fontBody}}>{sel.label} · {sel.sqft} ft²</div>
-          <div style={{fontSize:11,color:P.muted,fontFamily:P.fontBody,marginTop:1}}>{sel.desc}</div>
+          <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.12em",color:P.gold,fontFamily:P.fontBody,textTransform:"uppercase"}}>{mode==="owner"?"Unit Command":"Selected Unit"}</div>
+          <div style={{fontSize:isTablet?30:24,fontWeight:700,color:P.text,fontFamily:P.font,lineHeight:1}}>Unit {sel.id}</div>
         </div>
-        <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
-          <div style={{fontSize:24,fontWeight:700,color:P.gold,fontFamily:P.font}}>${sel.price}</div>
-          <div style={{fontSize:9,color:P.muted,fontFamily:P.fontBody}}>/month</div>
+        <span style={{padding:"7px 10px",borderRadius:999,background:STATUS[sel.status].color+"16",color:STATUS[sel.status].color,fontSize:10,fontWeight:900,fontFamily:P.fontBody,whiteSpace:"nowrap",border:`1px solid ${STATUS[sel.status].color}30`}}>{STATUS[sel.status].label}</span>
+      </div>
+
+      <div style={{padding:18,borderRadius:18,background:P.card,border:`1px solid ${P.gold}20`,boxShadow:"0 18px 44px rgba(26,23,20,.07)",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:14,marginBottom:14}}>
+          <div>
+            <div style={{fontSize:12,color:P.sub,fontFamily:P.fontBody,fontWeight:800}}>{sel.label} · {sel.sqft} ft²</div>
+            <div style={{fontSize:12,color:P.muted,fontFamily:P.fontBody,marginTop:3,lineHeight:1.45}}>{mode==="customer"?sel.desc:"Live unit status, tenant, rent, and balance."}</div>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontSize:34,fontWeight:700,color:P.gold,fontFamily:P.font,lineHeight:.85}}>${sel.price}</div>
+            <div style={{fontSize:10,color:P.muted,fontFamily:P.fontBody,fontWeight:800}}>/month</div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
+          {[
+            {l:"Size",v:sel.label},
+            {l:"Monthly",v:`$${sel.price}`},
+            {l:"Status",v:STATUS[sel.status].label,c:STATUS[sel.status].color},
+            {l:mode==="owner"?"Balance":"Access",v:mode==="owner"?`$${sel.balance||0}`:"24/7",c:mode==="owner"&&sel.balance>0?P.danger:P.text},
+          ].map(({l,v,c})=>(<div key={l} style={{padding:"10px 12px",borderRadius:12,background:P.borderLight,border:`1px solid ${P.border}`}}><div style={{fontSize:9,color:P.muted,fontWeight:900,letterSpacing:"0.08em",fontFamily:P.fontBody,textTransform:"uppercase"}}>{l}</div><div style={{fontSize:14,color:c||P.text,fontWeight:900,fontFamily:P.fontBody,marginTop:2}}>{v}</div></div>))}
         </div>
       </div>
-      {sel.tenant&&mode==="owner"&&(<div style={{padding:8,borderRadius:8,background:P.borderLight,marginBottom:6,border:`1px solid ${P.border}`}}><div style={{fontSize:12,fontWeight:700,color:P.text,fontFamily:P.fontBody}}>{sel.tenant.name}</div><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody}}>{sel.tenant.phone} · {sel.tenant.email}</div>{sel.balance>0&&<div style={{fontSize:11,fontWeight:700,color:"#dc2626",fontFamily:P.fontBody,marginTop:2}}>${sel.balance} past due</div>}</div>)}
-      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>{(sel.features||[]).map((f,i)=>(<span key={i} style={{padding:"3px 8px",borderRadius:5,background:P.goldLight,color:P.goldDark,fontSize:9,fontWeight:700,fontFamily:P.fontBody}}>✓ {f}</span>))}</div>
-      <button onClick={()=>setSelId(null)} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>✕ Deselect</button>
+
+      {sel.tenant&&mode==="owner"&&(<div style={{padding:14,borderRadius:16,background:"#fff",marginBottom:12,border:`1px solid ${P.border}`,boxShadow:"0 12px 30px rgba(26,23,20,.05)"}}><div style={{fontSize:10,fontWeight:900,color:P.gold,letterSpacing:"0.1em",fontFamily:P.fontBody,marginBottom:6}}>TENANT</div><div style={{fontSize:15,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>{sel.tenant.name}</div><div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody,marginTop:2,lineHeight:1.5}}>{sel.tenant.phone}<br/>{sel.tenant.email}</div>{sel.balance>0&&<div style={{marginTop:8,padding:"7px 9px",borderRadius:10,background:"#fff1f2",color:"#dc2626",fontSize:11,fontWeight:900,fontFamily:P.fontBody}}>${sel.balance} past due</div>}</div>)}
+
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>{(sel.features||[]).map((f,i)=>(<span key={i} style={{padding:"6px 9px",borderRadius:999,background:P.goldLight,color:P.goldDark,fontSize:10,fontWeight:900,fontFamily:P.fontBody,border:`1px solid ${P.gold}22`}}>✓ {f}</span>))}</div>
+      {mode==="customer"&&sel.status!=="available"&&<div style={{padding:12,borderRadius:14,background:P.borderLight,border:`1px solid ${P.border}`,color:P.sub,fontSize:12,fontWeight:800,fontFamily:P.fontBody,marginBottom:12}}>This unit is currently unavailable. Pick a green available unit to reserve instantly.</div>}
+      <button onClick={()=>setSelId(null)} style={{padding:"10px 14px",borderRadius:10,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody}}>✕ Deselect</button>
     </div>
   ):null;
 
@@ -934,7 +1151,7 @@ export default function App(){
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${P.gold},#d4a843)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>SC</div>
-            <div><div style={{fontSize:13,fontWeight:700,fontFamily:P.font}}>{FACILITY.name}</div><div style={{fontSize:9,color:P.muted}}>{mode==="owner"?"Owner Dashboard":"24/7 Self-Service"}</div></div>
+            <div><div style={{fontSize:13,fontWeight:700,fontFamily:P.font}}>{facility.name}</div><div style={{fontSize:9,color:P.muted}}>{mode==="owner"?"Owner Dashboard":"24/7 Self-Service"}</div></div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             {step>0&&step<4&&<button onClick={()=>setStep(step-1)} style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>Back</button>}
@@ -966,21 +1183,21 @@ export default function App(){
                   {isTablet&&(
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(88px,1fr))",gap:10,minWidth:300}}>
                       {[
-                        {v:units.filter(u=>u.status==="available").length,l:"Open",c:STATUS.available.color},
-                        {v:units.length,l:"Units",c:P.text},
-                        {v:`${Math.round(units.filter(u=>u.status!=="available").length/units.length*100)}%`,l:"Occupied",c:STATUS.occupied.color},
+                        {v:units.filter(u=>u.status==="available").length,l:mode==="owner"?"Open":"Ready",c:STATUS.available.color},
+                        {v:mode==="owner"?`$${monthlyRevenue.toLocaleString()}`:units.length,l:mode==="owner"?"Revenue":"Units",c:P.text},
+                        {v:`${occupancy}%`,l:"Occupied",c:STATUS.occupied.color},
                       ].map(({v,l,c})=>(<div key={l} style={{padding:"10px 12px",borderRadius:12,background:P.borderLight,border:`1px solid ${P.border}`}}><div style={{fontSize:24,fontWeight:700,color:c,fontFamily:P.font}}>{v}</div><div style={{fontSize:10,color:P.muted,fontWeight:700,fontFamily:P.fontBody,textTransform:"uppercase",letterSpacing:"0.08em"}}>{l}</div></div>))}
                     </div>
                   )}
                 </div>
                 <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,flexWrap:isTablet?"wrap":"nowrap"}}>
                   <button onClick={()=>setSf(null)} style={{padding:isTablet?"7px 12px":"5px 10px",borderRadius:999,border:`1px solid ${!sf?P.gold:P.border}`,background:!sf?P.goldLight:P.card,color:!sf?P.goldDark:P.muted,fontSize:isTablet?11:9,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0}}>All Units</button>
-                  {Object.entries(STATUS).map(([k,v])=>(<button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:isTablet?"7px 12px":"5px 10px",borderRadius:999,border:`1px solid ${sf===k?v.color+"40":P.border}`,background:sf===k?v.color+"12":P.card,color:sf===k?v.color:P.muted,fontSize:isTablet?11:9,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0,display:"flex",alignItems:"center",gap:5}}><span style={{width:6,height:6,borderRadius:"50%",background:v.color}}/>{v.label}</button>))}
+                  {shownStatuses.map((k)=>{const v=STATUS[k];return <button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:isTablet?"7px 12px":"6px 11px",borderRadius:999,border:`1px solid ${sf===k?v.color+"40":P.border}`,background:sf===k?v.color+"12":P.card,color:sf===k?v.color:P.muted,fontSize:isTablet?11:10,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0,display:"flex",alignItems:"center",gap:5}}><span style={{width:6,height:6,borderRadius:"50%",background:v.color}}/>{v.label}</button>})}
                 </div>
               </div>
               <div style={{flex:1,minHeight:isTablet?520:0,position:"relative",padding:isTablet?"0 24px 24px":"0"}}>
                 <div style={{height:"100%",minHeight:isTablet?520:0,border:isTablet?`1px solid ${P.border}`:"none",borderRadius:isTablet?22:0,overflow:"hidden",background:P.card}}>
-                  <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={sf}/>
+                  <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={mapFilter}/>
                 </div>
                 <div style={{position:"absolute",bottom:isTablet?36:8,right:isTablet?36:8,display:"flex",gap:6,zIndex:5}}>
                   <button onClick={()=>setFs(true)} style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.9)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:P.sub}}>⛶</button>

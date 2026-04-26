@@ -1,8 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import mapboxgl from "mapbox-gl";
-import MapboxDraw from "@mapbox/mapbox-gl-draw";
-import "mapbox-gl/dist/mapbox-gl.css";
-import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
@@ -92,17 +88,20 @@ function UnitPanel({ unit, onUpdate, onDelete, onClose }) {
   );
 }
 
-// ─── AI Suggest Modal ─────────────────────────────────────────────────────────
-function AISuggestModal({ onClose, onAccept, suggestions }) {
+// ─── Layout Draft Modal ───────────────────────────────────────────────────────
+function LayoutDraftModal({ onClose, onAccept, suggestions }) {
   return (
     <div style={{
       position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100,
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
-      <div style={{ background: P.card, borderRadius: 16, padding: 24, maxWidth: 380, width: "100%", fontFamily: P.fontBody }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: P.text, fontFamily: P.font, marginBottom: 8 }}>🤖 AI Suggestions</div>
-        <div style={{ fontSize: 13, color: P.sub, marginBottom: 16, lineHeight: 1.5 }}>
-          AI detected {suggestions.length} unit {suggestions.length === 1 ? "zone" : "zones"}. Accept to place them on the map — you can adjust each one after.
+      <div style={{ background: P.card, borderRadius: 16, padding: 24, maxWidth: 420, width: "100%", fontFamily: P.fontBody }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: P.text, fontFamily: P.font, marginBottom: 8 }}>Layout Draft Ready</div>
+        <div style={{ fontSize: 13, color: P.sub, marginBottom: 10, lineHeight: 1.5 }}>
+          This is a simple template, not an AI scan. It places {suggestions.length} suggested units around the current map center so you can edit them from a truthful starting point.
+        </div>
+        <div style={{ fontSize: 12, color: P.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Need exact placement? Draw unit boundaries manually instead.
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>
           {suggestions.map((s, i) => (
@@ -116,7 +115,7 @@ function AISuggestModal({ onClose, onAccept, suggestions }) {
             flex: 1, padding: "11px", borderRadius: 9, border: "none",
             background: `linear-gradient(135deg, ${P.gold}, #b8943f)`,
             color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
-          }}>Accept All</button>
+          }}>Add Draft Units</button>
           <button onClick={onClose} style={{
             padding: "11px 16px", borderRadius: 9, border: `1px solid ${P.border}`,
             background: P.card, color: P.sub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
@@ -132,80 +131,145 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
   const mapContainer = useRef(null);
   const map = useRef(null);
   const draw = useRef(null);
+  const mapboxglRef = useRef(null);
   const markersRef = useRef({});
 
   const [address, setAddress] = useState(facilityAddress);
   const [searching, setSearching] = useState(false);
   const [units, setUnits] = useState(existingUnits);
-  const [selectedId, setSelectedId] = useState(null);
+  const [, setSelectedId] = useState(null);
   const [editingUnit, setEditingUnit] = useState(null);
-  const [mode, setMode] = useState("view"); // view | draw | ai
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [mode, setMode] = useState("view"); // view | draw | draft
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftSuggestions, setDraftSuggestions] = useState(null);
   const [mapReady, setMapReady] = useState(false);
-  const [noToken, setNoToken] = useState(!MAPBOX_TOKEN);
+  const [noToken] = useState(!MAPBOX_TOKEN);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  const snapshot = useMemo(() => JSON.stringify({
+    address: address.trim(),
+    units: units.map(unit => ({ ...unit, price: Number(unit.price || 0) })),
+  }), [address, units]);
+
+  const initialSnapshot = useMemo(() => JSON.stringify({
+    address: facilityAddress.trim(),
+    units: existingUnits.map(unit => ({ ...unit, price: Number(unit.price || 0) })),
+  }), [existingUnits, facilityAddress]);
+
+  const hasUnsavedChanges = snapshot !== initialSnapshot;
+
+  useEffect(() => {
+    setSaveMessage("");
+  }, [snapshot]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasUnsavedChanges) return undefined;
+
+    const beforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const handleBack = () => {
+    if (!hasUnsavedChanges || typeof window === "undefined" || window.confirm("Leave builder without saving? Your layout edits will be lost.")) {
+      onBack?.();
+    }
+  };
 
   // Init map
   useEffect(() => {
     if (!MAPBOX_TOKEN || map.current) return;
-    mapboxgl.accessToken = MAPBOX_TOKEN;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/satellite-streets-v12",
-      center: [-95.9928, 36.154],
-      zoom: 17,
-      pitch: 0,
-    });
+    let active = true;
 
-    draw.current = new MapboxDraw({
-      displayControlsDefault: false,
-      controls: {},
-      defaultMode: "simple_select",
-      styles: [
-        { id: "gl-draw-polygon-fill", type: "fill", filter: ["all", ["==", "$type", "Polygon"]], paint: { "fill-color": P.gold, "fill-opacity": 0.25 } },
-        { id: "gl-draw-polygon-stroke", type: "line", filter: ["all", ["==", "$type", "Polygon"]], paint: { "line-color": P.gold, "line-width": 2 } },
-        { id: "gl-draw-polygon-fill-active", type: "fill", filter: ["all", ["==", "$type", "Polygon"], ["==", "active", "true"]], paint: { "fill-color": P.gold, "fill-opacity": 0.4 } },
-      ],
-    });
+    const initMap = async () => {
+      const [mapboxModule, drawModule] = await Promise.all([
+        import("mapbox-gl"),
+        import("@mapbox/mapbox-gl-draw"),
+        import("mapbox-gl/dist/mapbox-gl.css"),
+        import("@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css"),
+      ]);
 
-    map.current.addControl(draw.current);
-    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+      if (!active || map.current || !mapContainer.current) return;
 
-    map.current.on("load", () => setMapReady(true));
+      const mapboxgl = mapboxModule.default;
+      const MapboxDraw = drawModule.default;
+      mapboxglRef.current = mapboxgl;
+      mapboxgl.accessToken = MAPBOX_TOKEN;
 
-    map.current.on("draw.create", e => {
-      const feature = e.features[0];
-      const newUnit = {
-        id: feature.id,
-        featureId: feature.id,
-        label: `Unit ${Object.keys(markersRef.current).length + 1}`,
-        status: "available",
-        price: "99",
-        size: "10×10",
-        geometry: feature.geometry,
-        center: getCentroid(feature.geometry.coordinates[0]),
-      };
-      setUnits(prev => {
-        const updated = [...prev, newUnit];
-        return updated;
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/mapbox/satellite-streets-v12",
+        center: [-95.9928, 36.154],
+        zoom: 17,
+        pitch: 0,
       });
-      setEditingUnit(newUnit);
-      draw.current.changeMode("simple_select");
-      setMode("view");
+
+      draw.current = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {},
+        defaultMode: "simple_select",
+        styles: [
+          { id: "gl-draw-polygon-fill", type: "fill", filter: ["all", ["==", "$type", "Polygon"]], paint: { "fill-color": P.gold, "fill-opacity": 0.25 } },
+          { id: "gl-draw-polygon-stroke", type: "line", filter: ["all", ["==", "$type", "Polygon"]], paint: { "line-color": P.gold, "line-width": 2 } },
+          { id: "gl-draw-polygon-fill-active", type: "fill", filter: ["all", ["==", "$type", "Polygon"], ["==", "active", "true"]], paint: { "fill-color": P.gold, "fill-opacity": 0.4 } },
+        ],
+      });
+
+      map.current.addControl(draw.current);
+      map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+      map.current.on("load", () => setMapReady(true));
+
+      map.current.on("draw.create", e => {
+        const feature = e.features[0];
+        const newUnit = {
+          id: feature.id,
+          featureId: feature.id,
+          label: `Unit ${Object.keys(markersRef.current).length + 1}`,
+          status: "available",
+          price: "99",
+          size: "10×10",
+          geometry: feature.geometry,
+          center: getCentroid(feature.geometry.coordinates[0]),
+        };
+        setUnits(prev => {
+          const updated = [...prev, newUnit];
+          return updated;
+        });
+        setEditingUnit(newUnit);
+        draw.current.changeMode("simple_select");
+        setMode("view");
+      });
+
+      map.current.on("draw.selectionchange", e => {
+        if (e.features.length > 0) setSelectedId(e.features[0].id);
+        else setSelectedId(null);
+      });
+    };
+
+    initMap().catch(error => {
+      console.error("Failed to initialize facility builder map", error);
     });
 
-    map.current.on("draw.selectionchange", e => {
-      if (e.features.length > 0) setSelectedId(e.features[0].id);
-      else setSelectedId(null);
-    });
-
-    return () => { if (map.current) { map.current.remove(); map.current = null; } };
+    return () => {
+      active = false;
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+      draw.current = null;
+      mapboxglRef.current = null;
+    };
   }, []);
 
   // Render unit labels as markers
   useEffect(() => {
-    if (!mapReady || !map.current) return;
+    if (!mapReady || !map.current || !mapboxglRef.current) return;
 
     // Remove old markers
     Object.values(markersRef.current).forEach(m => m.remove());
@@ -224,7 +288,7 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
       el.textContent = unit.label || "?";
       el.addEventListener("click", () => setEditingUnit(unit));
 
-      const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+      const marker = new mapboxglRef.current.Marker({ element: el, anchor: "center" })
         .setLngLat(unit.center)
         .addTo(map.current);
 
@@ -247,15 +311,14 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
     setSearching(false);
   };
 
-  // AI suggest units from visible map area
-  const aiSuggest = async () => {
-    setAiLoading(true);
-    // Simulate AI response — in production, screenshot the map canvas and send to vision API
-    await new Promise(r => setTimeout(r, 1800));
+  // Draft a simple starter layout from the current map center
+  const generateLayoutDraft = async () => {
+    if (!map.current) return;
+    setDraftLoading(true);
+    await new Promise(r => setTimeout(r, 250));
     const center = map.current.getCenter();
-    // Generate plausible unit suggestions based on map center
     const suggestions = Array.from({ length: 12 }, (_, i) => ({
-      id: `ai-${Date.now()}-${i}`,
+      id: `draft-${Date.now()}-${i}`,
       label: `${String.fromCharCode(65 + Math.floor(i / 4))}-${String((i % 4) + 1).padStart(2, "0")}`,
       size: i % 3 === 0 ? "10×20" : i % 3 === 1 ? "10×10" : "5×5",
       price: i % 3 === 0 ? "169" : i % 3 === 1 ? "99" : "49",
@@ -266,24 +329,29 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
       ],
       geometry: null,
     }));
-    setAiSuggestions(suggestions);
-    setAiLoading(false);
+    setDraftSuggestions(suggestions);
+    setDraftLoading(false);
   };
 
-  const acceptAISuggestions = (suggestions) => {
+  const acceptDraftSuggestions = (suggestions) => {
     setUnits(prev => [...prev, ...suggestions]);
-    setAiSuggestions(null);
+    setDraftSuggestions(null);
   };
+
+  const normalizeUnit = (unit) => ({
+    ...unit,
+    price: Number(unit.price || 0),
+  });
 
   const updateUnit = (updated) => {
-    setUnits(prev => prev.map(u => u.id === updated.id ? updated : u));
+    setUnits(prev => prev.map(u => u.id === updated.id ? normalizeUnit(updated) : u));
     setEditingUnit(null);
   };
 
   const deleteUnit = (id) => {
     setUnits(prev => prev.filter(u => u.id !== id));
     if (draw.current) {
-      try { draw.current.delete(id); } catch (e) {}
+      try { draw.current.delete(id); } catch { return; }
     }
     setEditingUnit(null);
   };
@@ -292,6 +360,11 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
     setMode("draw");
     setEditingUnit(null);
     if (draw.current) draw.current.changeMode("draw_polygon");
+  };
+
+  const handleSave = () => {
+    onSave?.({ units: units.map(normalizeUnit), address: address.trim() });
+    setSaveMessage(`Saved ${units.length} unit${units.length === 1 ? "" : "s"} to this device.`);
   };
 
   if (noToken) {
@@ -309,7 +382,7 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
         }}>
           VITE_MAPBOX_TOKEN=pk.eyJ1...
         </div>
-        <button onClick={onBack} style={{
+        <button onClick={handleBack} style={{
           padding: "11px 24px", borderRadius: 9, border: `1px solid ${P.border}`,
           background: P.card, color: P.sub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
         }}>← Back</button>
@@ -331,7 +404,7 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
         borderBottom: `1px solid ${P.border}`, padding: "10px 14px",
       }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={onBack} style={{
+          <button onClick={handleBack} style={{
             padding: "7px 12px", borderRadius: 7, border: `1px solid ${P.border}`,
             background: P.card, color: P.sub, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody, flexShrink: 0,
           }}>← Back</button>
@@ -355,33 +428,60 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
       {/* Bottom toolbar */}
       <div style={{
         position: "absolute", bottom: 16, left: 16, right: 16, zIndex: 20,
-        display: "flex", gap: 8,
+        display: "flex", flexDirection: "column", gap: 8,
       }}>
-        <button onClick={startDraw} style={{
-          flex: 1, padding: "12px 8px", borderRadius: 10,
-          background: mode === "draw" ? P.gold : "rgba(255,255,255,0.95)",
-          backdropFilter: "blur(10px)",
-          border: `1px solid ${mode === "draw" ? P.gold : P.border}`,
-          color: mode === "draw" ? "#fff" : P.text,
-          fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
-        }}>
-          ✏️ Draw Unit
-        </button>
-        <button onClick={aiSuggest} disabled={aiLoading} style={{
-          flex: 1, padding: "12px 8px", borderRadius: 10,
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          padding: "8px 12px", borderRadius: 10,
           background: "rgba(255,255,255,0.95)", backdropFilter: "blur(10px)",
-          border: `1px solid ${P.border}`,
-          color: P.text, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
+          border: `1px solid ${hasUnsavedChanges ? P.gold + "40" : P.border}`,
+          fontFamily: P.fontBody,
         }}>
-          {aiLoading ? "⏳ Analyzing..." : "🤖 AI Suggest"}
-        </button>
-        <button onClick={() => onSave && onSave(units)} style={{
-          flex: 1, padding: "12px 8px", borderRadius: 10,
-          background: `linear-gradient(135deg, ${P.gold}, #b8943f)`,
-          border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
-        }}>
-          💾 Save ({units.length})
-        </button>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: hasUnsavedChanges ? P.goldDark : P.text }}>
+              {hasUnsavedChanges ? "Unsaved layout changes" : "All builder changes saved"}
+            </div>
+            <div style={{ fontSize: 11, color: saveMessage ? P.goldDark : P.sub }}>
+              {saveMessage || (hasUnsavedChanges ? "Save before leaving to update the dashboard and customer flow." : "Saved locally on this device. Billing and locks are still demo-only.")}
+            </div>
+          </div>
+          <div style={{
+            padding: "5px 9px", borderRadius: 999,
+            background: hasUnsavedChanges ? P.goldLight : "#eef9f0",
+            color: hasUnsavedChanges ? P.goldDark : STATUS_COLORS.available,
+            fontSize: 10, fontWeight: 800, letterSpacing: "0.04em",
+          }}>
+            {hasUnsavedChanges ? "NOT SAVED" : "SAVED"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={startDraw} style={{
+            flex: 1, padding: "12px 8px", borderRadius: 10,
+            background: mode === "draw" ? P.gold : "rgba(255,255,255,0.95)",
+            backdropFilter: "blur(10px)",
+            border: `1px solid ${mode === "draw" ? P.gold : P.border}`,
+            color: mode === "draw" ? "#fff" : P.text,
+            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
+          }}>
+            ✏️ Draw Unit
+          </button>
+          <button onClick={generateLayoutDraft} disabled={draftLoading} style={{
+            flex: 1, padding: "12px 8px", borderRadius: 10,
+            background: "rgba(255,255,255,0.95)", backdropFilter: "blur(10px)",
+            border: `1px solid ${P.border}`,
+            color: P.text, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
+          }}>
+            {draftLoading ? "⏳ Building Draft..." : "📐 Draft Layout"}
+          </button>
+          <button onClick={handleSave} style={{
+            flex: 1, padding: "12px 8px", borderRadius: 10,
+            background: `linear-gradient(135deg, ${P.gold}, #b8943f)`,
+            border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: P.fontBody,
+            boxShadow: hasUnsavedChanges ? `0 6px 20px ${P.gold}30` : "none",
+          }}>
+            {hasUnsavedChanges ? `💾 Save Changes (${units.length})` : `✅ Saved (${units.length})`}
+          </button>
+        </div>
       </div>
 
       {/* Unit count badge */}
@@ -407,12 +507,12 @@ export default function FacilityBuilder({ onSave, onBack, existingUnits = [], fa
         />
       )}
 
-      {/* AI suggestions modal */}
-      {aiSuggestions && (
-        <AISuggestModal
-          suggestions={aiSuggestions}
-          onAccept={acceptAISuggestions}
-          onClose={() => setAiSuggestions(null)}
+      {/* Layout draft modal */}
+      {draftSuggestions && (
+        <LayoutDraftModal
+          suggestions={draftSuggestions}
+          onAccept={acceptDraftSuggestions}
+          onClose={() => setDraftSuggestions(null)}
         />
       )}
 
