@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useRef, useEffect, useCallback } from "react";
+import { Suspense, lazy, useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 const FacilityBuilder = lazy(() => import("./FacilityBuilder"));
 
@@ -225,6 +225,46 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
   const ptrCache = useRef([]);
   const lastPan = useRef({x:0,y:0});
   const lastPinch = useRef({dist:0,angle:0,mx:0,my:0});
+  const canvasSizeRef = useRef({width:0,height:0,dpr:0});
+  const projectionScratchRef = useRef([]);
+
+  const mapData = useMemo(()=>{
+    const streetZ=[-11.3,-8.7,-5.8,-3.2,-0.3,2.3];
+    const getDoorSide=(unit)=>{
+      const row=String(unit.id||"").split("-")[0];
+      if(/[ABC]1$/.test(row))return -1;
+      if(/[ABC]2$/.test(row))return 1;
+      let best=streetZ[0];
+      for(let i=1;i<streetZ.length;i++){
+        const z=streetZ[i];
+        if(Math.abs(z-unit.z)<Math.abs(best-unit.z))best=z;
+      }
+      return best<unit.z?-1:1;
+    };
+    const renderUnits=units.map((unit)=>({
+      ...unit,
+      _doorSide:getDoorSide(unit),
+      _accent:hx(STATUS[unit.status]?.color || STATUS.available.color),
+      _groupKey:String(unit.id||"").charAt(0)||"X",
+      _depth:0,
+    }));
+    const groupsByKey=new Map();
+    renderUnits.forEach((unit)=>{
+      if(!groupsByKey.has(unit._groupKey))groupsByKey.set(unit._groupKey,[]);
+      groupsByKey.get(unit._groupKey).push(unit);
+    });
+    const visualGapClose=0.28;
+    const buildingGroups=Array.from(groupsByKey.values()).map((groupUnits)=>{
+      const x1=Math.min(...groupUnits.map(u=>u.x-(u.w+visualGapClose)/2));
+      const x2=Math.max(...groupUnits.map(u=>u.x+(u.w+visualGapClose)/2));
+      const z1=Math.min(...groupUnits.map(u=>u.z-u.d/2));
+      const z2=Math.max(...groupUnits.map(u=>u.z+u.d/2));
+      return { key:groupUnits[0]?._groupKey || "X", units:groupUnits, x1, x2, z1, z2, _depth:0 };
+    });
+    const availableCount=renderUnits.filter(u=>u.status==="available").length;
+    const occupiedPercent=renderUnits.length?Math.round(renderUnits.filter(u=>u.status!=="available").length/renderUnits.length*100):0;
+    return { renderUnits, buildingGroups, availableCount, occupiedPercent };
+  },[units]);
 
   // Critters state — initialized once
   const [critters] = useState(()=>{
@@ -280,11 +320,11 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
   },[selId,units]);
 
   const project = useCallback((x,y,z,c)=>{
-    let dx=x-c.cx, dz=z-c.cz;
-    const ca=Math.cos(c.angle*Math.PI/180),sa=Math.sin(c.angle*Math.PI/180);
-    let rx=dx*ca-dz*sa, rz=dx*sa+dz*ca;
-    const cb=Math.cos(c.tiltX),sb=Math.sin(c.tiltX);
-    let ry=y*cb-rz*sb, rz2=y*sb+rz*cb;
+    const dx=x-c.cx, dz=z-c.cz;
+    const ca=c.ca ?? Math.cos(c.angle*Math.PI/180), sa=c.sa ?? Math.sin(c.angle*Math.PI/180);
+    const rx=dx*ca-dz*sa, rz=dx*sa+dz*ca;
+    const cb=c.cb ?? Math.cos(c.tiltX), sb=c.sb ?? Math.sin(c.tiltX);
+    const ry=y*cb-rz*sb, rz2=y*sb+rz*cb;
     const sc=c.dist/(c.dist+rz2);
     return{sx:c.scx+rx*sc*c.zm, sy:c.scy-ry*sc*c.zm, dp:rz2, sc};
   },[]);
@@ -407,10 +447,19 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
 
       const dpr=window.devicePixelRatio||1;
       const rect=cv.getBoundingClientRect();
-      cv.width=rect.width*dpr; cv.height=rect.height*dpr;
-      ctx.setTransform(dpr,0,0,dpr,0,0);
       const W=rect.width, H=rect.height;
+      const pixelW=Math.max(1,Math.round(W*dpr));
+      const pixelH=Math.max(1,Math.round(H*dpr));
+      const size=canvasSizeRef.current;
+      if(size.width!==pixelW || size.height!==pixelH || size.dpr!==dpr){
+        cv.width=pixelW; cv.height=pixelH;
+        size.width=pixelW; size.height=pixelH; size.dpr=dpr;
+      }
+      ctx.setTransform(dpr,0,0,dpr,0,0);
       c.scx=W/2; c.scy=H/2+H*0.06; c.zm=c.zoom;
+      const angleRad=c.angle*Math.PI/180;
+      c.ca=Math.cos(angleRad); c.sa=Math.sin(angleRad);
+      c.cb=Math.cos(c.tiltX); c.sb=Math.sin(c.tiltX);
 
       // ── ENVIRONMENT ──
       const sky=ctx.createLinearGradient(0,0,0,H);
@@ -552,40 +601,30 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         ctx.fillText(l,p.sx,p.sy);
       });
 
-      const ang0=c.angle*Math.PI/180;
-      const ca0=Math.cos(ang0),sa0=Math.sin(ang0);
-      const sorted=[...units].map(u=>{
-        const hw=u.w/2,hd=u.d/2;
-        const corners4=[[u.x-hw,u.z-hd],[u.x+hw,u.z-hd],[u.x+hw,u.z+hd],[u.x-hw,u.z+hd]];
-        const maxDp=Math.max(...corners4.map(([x,z])=>{
-          const dx=x-c.cx,dz=z-c.cz;
-          return dx*sa0+dz*ca0;
-        }));
-        return{...u,_dp:maxDp};
-      }).sort((a,b)=>b._dp-a._dp);
-      const projected=[];
+      const ca0=c.ca, sa0=c.sa;
+      const sorted=mapData.renderUnits;
+      for(let i=0;i<sorted.length;i++){
+        const u=sorted[i];
+        const hw=u.w/2, hd=u.d/2;
+        const d1=(u.x-hw-c.cx)*sa0+(u.z-hd-c.cz)*ca0;
+        const d2=(u.x+hw-c.cx)*sa0+(u.z-hd-c.cz)*ca0;
+        const d3=(u.x+hw-c.cx)*sa0+(u.z+hd-c.cz)*ca0;
+        const d4=(u.x-hw-c.cx)*sa0+(u.z+hd-c.cz)*ca0;
+        u._depth=Math.max(d1,d2,d3,d4);
+      }
+      sorted.sort((a,b)=>b._depth-a._depth);
+      const projected=projectionScratchRef.current;
+      projected.length=0;
       const curSel=selRef.current;
       const curFilter=filterRef.current;
-      const rowDoorDirection=(unit)=>{
-        const row=String(unit.id||"").split("-")[0];
-        if(/[ABC]1$/.test(row))return -1;
-        if(/[ABC]2$/.test(row))return 1;
-        const streetZ=[-11.3,-8.7,-5.8,-3.2,-0.3,2.3];
-        const nearest=streetZ.reduce((best,z)=>Math.abs(z-unit.z)<Math.abs(best-unit.z)?z:best,streetZ[0]);
-        return nearest<unit.z?-1:1;
-      };
 
       // Draw one continuous low building shell per A/B/C block. Individual units are doors
       // on opposite long sides of that building, like a real self-storage row.
-      const drawBuildingShell=(groupUnits)=>{
-        if(!groupUnits.length)return;
-        const visualGapClose=0.28;
+      const drawBuildingShell=(group)=>{
+        if(!group.units.length)return;
         const unitH=0.98, uhh=unitH/2;
         const wall=[213,207,194], roof=[178,173,160];
-        const x1=Math.min(...groupUnits.map(u=>u.x-(u.w+visualGapClose)/2));
-        const x2=Math.max(...groupUnits.map(u=>u.x+(u.w+visualGapClose)/2));
-        const z1=Math.min(...groupUnits.map(u=>u.z-u.d/2));
-        const z2=Math.max(...groupUnits.map(u=>u.z+u.d/2));
+        const { x1, x2, z1, z2 } = group;
         const pitchRise=(z2-z1)*0.125;
         const ridgeZ=(z1+z2)/2;
         const corners=[
@@ -598,11 +637,10 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         const sh=[[x1,0,z1],[x2,0,z1],[x2,0,z2],[x1,0,z2]].map(([x,,z])=>project(x+0.42,-0.025,z+0.28,c));
         ctx.save();ctx.filter="blur(7px)";ctx.beginPath();ctx.moveTo(sh[0].sx+4,sh[0].sy+4);sh.slice(1).forEach(pt=>ctx.lineTo(pt.sx+4,pt.sy+4));ctx.closePath();ctx.fillStyle="rgba(0,0,0,0.16)";ctx.fill();ctx.restore();
 
-        const ang2=c.angle*Math.PI/180;
-        const camDirX=Math.sin(ang2), camDirZ=Math.cos(ang2);
-        const showFront=camDirZ>0, showBack=camDirZ<0, showLeft=camDirX<0, showRight=camDirX>0;
         const drawFace=(pts,br,isTop)=>{
-          ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);pts.slice(1).forEach(pt=>ctx.lineTo(pt.sx,pt.sy));ctx.closePath();
+          ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);
+          for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].sx,pts[i].sy);
+          ctx.closePath();
           if(isTop){
             const tg=ctx.createLinearGradient(pts[0].sx,pts[0].sy,pts[2].sx,pts[2].sy);
             tg.addColorStop(0,rgba(shade(roof,br*1.12),0.94));
@@ -612,17 +650,17 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           }else ctx.fillStyle=rgba(shade(wall,br),0.95);
           ctx.fill();ctx.strokeStyle=isTop?"rgba(255,255,255,0.18)":"rgba(33,37,41,0.24)";ctx.lineWidth=isTop?0.9:1;ctx.stroke();
         };
-        const drawRoofPlane=(pts,br)=>drawFace(pts,br,true);
-        if(!showFront)drawFace([corners[0],corners[1],corners[2],corners[3]],0.55,false);
-        if(!showBack) drawFace([corners[5],corners[4],corners[7],corners[6]],0.45,false);
-        if(!showLeft) drawFace([corners[4],corners[0],corners[3],corners[7]],0.50,false);
-        if(!showRight)drawFace([corners[1],corners[5],corners[6],corners[2]],0.65,false);
-        if(showFront) drawFace([corners[0],corners[1],corners[2],corners[3]],0.72,false);
-        if(showBack)  drawFace([corners[5],corners[4],corners[7],corners[6]],0.60,false);
-        if(showLeft)  drawFace([corners[4],corners[0],corners[3],corners[7]],0.55,false);
-        if(showRight) drawFace([corners[1],corners[5],corners[6],corners[2]],0.82,false);
-        drawRoofPlane([corners[3],corners[2],ridgeR,ridgeL],1.02);
-        drawRoofPlane([ridgeL,ridgeR,corners[6],corners[7]],0.92);
+        const avgDepth=(pts)=>pts.reduce((sum,pt)=>sum+pt.dp,0)/pts.length;
+        const faces=[
+          {pts:[corners[0],corners[1],corners[2],corners[3]],br:c.ca>=0?0.72:0.55,top:false},
+          {pts:[corners[5],corners[4],corners[7],corners[6]],br:c.ca<0?0.60:0.45,top:false},
+          {pts:[corners[4],corners[0],corners[3],corners[7]],br:c.sa<0?0.55:0.50,top:false},
+          {pts:[corners[1],corners[5],corners[6],corners[2]],br:c.sa>=0?0.82:0.65,top:false},
+          {pts:[corners[3],corners[2],ridgeR,ridgeL],br:1.02,top:true},
+          {pts:[ridgeL,ridgeR,corners[6],corners[7]],br:0.92,top:true},
+        ];
+        faces.sort((a,b)=>avgDepth(b.pts)-avgDepth(a.pts));
+        faces.forEach((face)=>drawFace(face.pts,face.br,face.top));
 
         ctx.strokeStyle="rgba(255,255,255,0.24)";ctx.lineWidth=1;
         ctx.beginPath();ctx.moveTo(ridgeL.sx,ridgeL.sy);ctx.lineTo(ridgeR.sx,ridgeR.sy);ctx.stroke();
@@ -636,23 +674,22 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         }
       };
 
-      const buildingGroups=Object.values(units.reduce((acc,u)=>{
-        const key=String(u.id||"").charAt(0)||"X";
-        (acc[key] ||= []).push(u);
-        return acc;
-      },{})).sort((a,b)=>{
-        const az=a.reduce((s,u)=>s+u.z,0)/a.length, bz=b.reduce((s,u)=>s+u.z,0)/b.length;
-        return bz-az;
+      mapData.buildingGroups.forEach((group)=>{
+        group._depth=Math.max(
+          (group.x1-c.cx)*sa0+(group.z1-c.cz)*ca0,
+          (group.x2-c.cx)*sa0+(group.z1-c.cz)*ca0,
+          (group.x2-c.cx)*sa0+(group.z2-c.cz)*ca0,
+          (group.x1-c.cx)*sa0+(group.z2-c.cz)*ca0,
+        );
       });
-      buildingGroups.forEach(drawBuildingShell);
+      mapData.buildingGroups.sort((a,b)=>b._depth-a._depth).forEach(drawBuildingShell);
 
       sorted.forEach(unit=>{
         const visualGapClose=0.28;
         const hw=(unit.w+visualGapClose)/2, hd=unit.d/2;
         const isSel=unit.id===curSel;
         const isDim=(curFilter&&unit.status!==curFilter);
-        const st=STATUS[unit.status];
-        const accent=hx(st.color);
+        const accent=unit._accent;
         const unitH=isSel?1.02:0.98;
         const uhh=unitH/2;
         const door=[228,224,214];
@@ -676,7 +713,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         const showBack=camDirZ<0;
 
         if(!isDim){
-          const doorSide=rowDoorDirection(unit);
+          const doorSide=unit._doorSide;
           const doorVisible=doorSide<0?showFront:showBack;
           if(doorVisible){
             const doorZ=unit.z+doorSide*hd+doorSide*0.012;
@@ -828,8 +865,8 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
 
       const now=new Date();
       const tStr=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
-      const avC=units.filter(u=>u.status==="available").length;
-      const ocP=Math.round(units.filter(u=>u.status!=="available").length/units.length*100);
+      const avC=mapData.availableCount;
+      const ocP=mapData.occupiedPercent;
       ctx.save();
       const dp=0.5+Math.sin(t*4)*0.5;
       ctx.beginPath();ctx.arc(15,17,3.5,0,Math.PI*2);ctx.fillStyle=`rgba(34,197,94,${0.3+dp*0.5})`;ctx.fill();
@@ -843,7 +880,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
     };
     render(performance.now());
     return()=>cancelAnimationFrame(frame);
-  },[critters,units,project]);
+  },[critters,mapData,project]);
 
   return(
     <div style={{width:"100%",height:"100%",position:"relative"}}>
