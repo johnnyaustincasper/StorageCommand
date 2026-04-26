@@ -583,11 +583,11 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         const st=STATUS[unit.status];
         const accent=hx(st.color);
         const alpha=isDim?0.18:isSel?1.0:0.92;
-        const unitH=isSel?unit.h*1.04:unit.h;
+        const unitH=isSel?1.02:0.98;
         const uhh=unitH/2;
-        const wall=[184,181,171];
-        const roof=[86,88,84];
-        const door=[124,128,124];
+        const wall=[213,207,194];
+        const roof=[178,173,160];
+        const door=[228,224,214];
 
         const corners=[
           [-hw,-uhh,-hd],[hw,-uhh,-hd],[hw,uhh,-hd],[-hw,uhh,-hd],
@@ -602,7 +602,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
 
         if(isSel){
           const gc=project(unit.x,0.04,unit.z,c);
-          const gr=Math.max(22,corners[3].sc*c.zm*0.42);
+          const gr=Math.max(18,corners[3].sc*c.zm*0.34);
           const glow=ctx.createRadialGradient(gc.sx,gc.sy,0,gc.sx,gc.sy,gr);
           glow.addColorStop(0,"rgba(201,168,76,0.28)");glow.addColorStop(0.45,"rgba(201,168,76,0.12)");glow.addColorStop(1,"rgba(201,168,76,0)");
           ctx.fillStyle=glow;ctx.fillRect(gc.sx-gr,gc.sy-gr,gr*2,gr*2);
@@ -619,9 +619,9 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);pts.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
           if(isTop&&!isDim){
             const tg=ctx.createLinearGradient(pts[0].sx,pts[0].sy,pts[2].sx,pts[2].sy);
-            tg.addColorStop(0,rgba(shade(roof,br*1.08),alpha));
-            tg.addColorStop(0.5,rgba(shade(roof,br*0.96),alpha));
-            tg.addColorStop(1,rgba(shade(roof,br*0.78),alpha));
+            tg.addColorStop(0,rgba(shade(roof,br*1.12),alpha));
+            tg.addColorStop(0.55,rgba(shade(roof,br*1.02),alpha));
+            tg.addColorStop(1,rgba(shade(roof,br*0.92),alpha));
             ctx.fillStyle=tg;
           }else{
             ctx.fillStyle=rgba(shade(wall,br),alpha);
@@ -661,7 +661,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           if(doorVisible){
             const doorZ=unit.z+doorSide*hd+doorSide*0.012;
             const d1=project(unit.x-hw*0.46,0.03,doorZ,c),d2=project(unit.x+hw*0.46,0.03,doorZ,c);
-            const d3=project(unit.x-hw*0.46,unitH*0.58,doorZ,c),d4=project(unit.x+hw*0.46,unitH*0.58,doorZ,c);
+            const d3=project(unit.x-hw*0.46,unitH*0.78,doorZ,c),d4=project(unit.x+hw*0.46,unitH*0.78,doorZ,c);
             ctx.beginPath();ctx.moveTo(d1.sx,d1.sy);ctx.lineTo(d2.sx,d2.sy);ctx.lineTo(d4.sx,d4.sy);ctx.lineTo(d3.sx,d3.sy);ctx.closePath();
             const dg=ctx.createLinearGradient(d1.sx,d1.sy,d4.sx,d4.sy);
             dg.addColorStop(0,rgba(shade(door,0.82),0.9));dg.addColorStop(0.55,rgba(shade(door,1.03),0.92));dg.addColorStop(1,rgba(shade(door,0.72),0.9));
@@ -673,7 +673,7 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
               ctx.beginPath();ctx.moveTo(d1.sx+(d3.sx-d1.sx)*f,d1.sy+(d3.sy-d1.sy)*f);ctx.lineTo(d2.sx+(d4.sx-d2.sx)*f,d2.sy+(d4.sy-d2.sy)*f);ctx.stroke();
             }
             const accentZ=unit.z+doorSide*hd+doorSide*0.018;
-            const a1=project(unit.x-hw*0.46,unitH*0.61,accentZ,c),a2=project(unit.x+hw*0.46,unitH*0.61,accentZ,c);
+            const a1=project(unit.x-hw*0.46,unitH*0.82,accentZ,c),a2=project(unit.x+hw*0.46,unitH*0.82,accentZ,c);
             ctx.beginPath();ctx.moveTo(a1.sx,a1.sy);ctx.lineTo(a2.sx,a2.sy);
             ctx.strokeStyle=rgba(accent,isSel?0.95:0.55);ctx.lineWidth=Math.max(1,a1.sc*c.zm*0.035);ctx.stroke();
           }
