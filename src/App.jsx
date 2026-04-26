@@ -576,7 +576,8 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       };
 
       sorted.forEach(unit=>{
-        const hw=unit.w/2, hd=unit.d/2;
+        const visualGapClose=0.28;
+        const hw=(unit.w+visualGapClose)/2, hd=unit.d/2;
         const isSel=unit.id===curSel;
         const isDim=(curFilter&&unit.status!==curFilter);
         const st=STATUS[unit.status];
@@ -653,6 +654,8 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           ctx.beginPath();ctx.moveTo(corners[3].sx,corners[3].sy);ctx.lineTo(corners[2].sx,corners[2].sy);ctx.stroke();
 
           // Roll-up door faces the nearest drive lane/street, not always the same world side.
+          // Unit shells intentionally overlap slightly so each row reads as one joined building,
+          // while the door panels/labels remain individually selectable.
           const doorSide=rowDoorDirection(unit);
           const doorVisible=doorSide<0?showFront:showBack;
           if(doorVisible){
