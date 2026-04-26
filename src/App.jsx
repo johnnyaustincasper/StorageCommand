@@ -266,31 +266,6 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
     return { renderUnits, buildingGroups, availableCount, occupiedPercent };
   },[units]);
 
-  // Critters state — initialized once
-  const [critters] = useState(()=>{
-    const mkBunny=()=>({
-      type:"bunny", x:(Math.random()-0.5)*32, z:(Math.random()-0.5)*20,
-      tx:(Math.random()-0.5)*32, tz:(Math.random()-0.5)*20,
-      wait:Math.random()*4, hopPhase:0, hopping:false,
-      flip:Math.random()>0.5,
-    });
-    const mkSquirrel=()=>({
-      type:"squirrel", x:(Math.random()-0.5)*32, z:(Math.random()-0.5)*20,
-      tx:(Math.random()-0.5)*32, tz:(Math.random()-0.5)*20,
-      wait:Math.random()*6, phase:0, flip:false,
-    });
-    const mkBird=()=>({
-      type:"bird", x:-60, z:(Math.random()-0.5)*10,
-      speed:18+Math.random()*12, y:3+Math.random()*2,
-      wing:0, wait:Math.random()*12,
-    });
-    return [
-      mkBunny(),mkBunny(),mkBunny(),
-      mkSquirrel(),mkSquirrel(),
-      mkBird(),mkBird(),
-    ];
-  });
-
   // PC right-click rotate
   const rightDragRef = useRef({active:false,lx:0,ly:0});
   const onMouseDown=(e)=>{
@@ -431,7 +406,6 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
 
     const render=(ts)=>{
       const dt=Math.min(0.05,(ts-last)/1000); last=ts;
-      const t=ts*0.001;
       const c=camRef.current, tg=targetRef.current;
 
       c.angle+=(tg.angle-c.angle)*0.05;
@@ -567,9 +541,8 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       drawFenceSegment(  5, 4.5, 21, 4.5);
 
       // ── AUTOMATIC GATE ──
-      // Gate sits at x=1 to 5, z=4.5. Two gate posts + animated sliding arm
-      const gateOpen=0.5+Math.sin(t*0.4)*0.5; // slowly opens/closes for demo
-      const gateSlide=gateOpen*3.5; // slides right up to 3.5 units
+      // Gate sits at x=1 to 5, z=4.5. Two gate posts + fixed sliding arm.
+      const gateSlide=2.6;
       const gLP=project(1,0,4.5,c), gRP=project(5,0,4.5,c);
       const gLT=project(1,fenceH*1.4,4.5,c), gRT=project(5,fenceH*1.4,4.5,c);
       // Left gate post
@@ -753,134 +726,39 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       });
       projRef.current=projected;
 
-      // ── CRITTERS ──
-      critters.forEach(cr=>{
-        if(cr.type==="bunny"){
-          if(!cr.hopping){
-            cr.wait-=dt;
-            if(cr.wait<=0){
-              cr.tx=(Math.random()-0.5)*30; cr.tz=(Math.random()-0.5)*16;
-              cr.hopping=true; cr.hopPhase=0;
-              cr.flip=cr.tx<cr.x;
-            }
-          } else {
-            const dx=cr.tx-cr.x, dz=cr.tz-cr.z;
-            const dist=Math.sqrt(dx*dx+dz*dz);
-            if(dist<0.3){cr.hopping=false;cr.wait=1.5+Math.random()*3;}
-            else{
-              const spd=3.5*dt; const nx=dx/dist,nz=dz/dist;
-              cr.x+=nx*spd; cr.z+=nz*spd; cr.hopPhase+=dt*8;
-            }
-          }
-          const hop=cr.hopping?Math.max(0,Math.sin(cr.hopPhase)*0.4):0;
-          const bp=project(cr.x,hop,cr.z,c);
-          const sc=Math.max(0.3,bp.sc*c.zm*0.07);
-          ctx.save(); ctx.translate(bp.sx,bp.sy); if(cr.flip)ctx.scale(-1,1);
-          // Shadow
-          ctx.beginPath();ctx.ellipse(0,sc*0.4,sc*1.1,sc*0.35,0,0,Math.PI*2);
-          ctx.fillStyle="rgba(0,0,0,0.15)";ctx.fill();
-          // Body
-          ctx.beginPath();ctx.ellipse(0,0,sc*1.1,sc*0.75,0,0,Math.PI*2);
-          ctx.fillStyle="#e8e0d4";ctx.fill();
-          // Head
-          ctx.beginPath();ctx.ellipse(sc*0.9,-sc*0.5,sc*0.65,sc*0.6,0,0,Math.PI*2);
-          ctx.fillStyle="#e8e0d4";ctx.fill();
-          // Ear 1
-          ctx.beginPath();ctx.ellipse(sc*0.75,-sc*1.3,sc*0.18,sc*0.55,-0.2,0,Math.PI*2);
-          ctx.fillStyle="#e8e0d4";ctx.fill();
-          ctx.beginPath();ctx.ellipse(sc*0.75,-sc*1.3,sc*0.08,sc*0.35,-0.2,0,Math.PI*2);
-          ctx.fillStyle="#f0a0b0";ctx.fill();
-          // Ear 2
-          ctx.beginPath();ctx.ellipse(sc*1.05,-sc*1.2,sc*0.18,sc*0.55,0.15,0,Math.PI*2);
-          ctx.fillStyle="#ddd5c8";ctx.fill();
-          // Eye
-          ctx.beginPath();ctx.arc(sc*1.15,-sc*0.55,sc*0.12,0,Math.PI*2);
-          ctx.fillStyle="#2a1a1a";ctx.fill();
-          // Tail
-          ctx.beginPath();ctx.arc(-sc*0.9,sc*0.1,sc*0.3,0,Math.PI*2);
-          ctx.fillStyle="#fff";ctx.fill();
-          ctx.restore();
-        }
-
-        if(cr.type==="squirrel"){
-          cr.wait-=dt;
-          if(cr.wait<=0){
-            const moving=Math.random()>0.4;
-            if(moving){cr.tx=(Math.random()-0.5)*30;cr.tz=(Math.random()-0.5)*16;cr.wait=0.8+Math.random()*1.5;}
-            else cr.wait=0.5+Math.random()*1.5;
-          }
-          const dx=cr.tx-cr.x,dz=cr.tz-cr.z,dist=Math.sqrt(dx*dx+dz*dz);
-          if(dist>0.4){const spd=5*dt;cr.x+=dx/dist*spd;cr.z+=dz/dist*spd;cr.flip=dx<0;}
-          cr.phase+=dt*6;
-          const sp=project(cr.x,0,cr.z,c);
-          const sc=Math.max(0.3,sp.sc*c.zm*0.065);
-          const bodyBob=dist>0.4?Math.sin(cr.phase)*sc*0.15:0;
-          ctx.save();ctx.translate(sp.sx,sp.sy+bodyBob);if(cr.flip)ctx.scale(-1,1);
-          // Shadow
-          ctx.beginPath();ctx.ellipse(0,sc*0.3,sc,sc*0.3,0,0,Math.PI*2);
-          ctx.fillStyle="rgba(0,0,0,0.12)";ctx.fill();
-          // Body
-          ctx.beginPath();ctx.ellipse(0,-sc*0.2,sc*0.9,sc*0.65,0,0,Math.PI*2);
-          ctx.fillStyle="#b8752a";ctx.fill();
-          // Belly
-          ctx.beginPath();ctx.ellipse(sc*0.15,-sc*0.15,sc*0.45,sc*0.4,0,0,Math.PI*2);
-          ctx.fillStyle="#e8c080";ctx.fill();
-          // Head
-          ctx.beginPath();ctx.ellipse(sc*0.85,-sc*0.75,sc*0.55,sc*0.5,0.2,0,Math.PI*2);
-          ctx.fillStyle="#b8752a";ctx.fill();
-          // Ear
-          ctx.beginPath();ctx.ellipse(sc*0.9,-sc*1.25,sc*0.15,sc*0.28,0,0,Math.PI*2);
-          ctx.fillStyle="#b8752a";ctx.fill();
-          // Eye
-          ctx.beginPath();ctx.arc(sc*1.1,-sc*0.78,sc*0.1,0,Math.PI*2);
-          ctx.fillStyle="#1a0a00";ctx.fill();
-          // Tail (big fluffy arc)
-          ctx.beginPath();ctx.moveTo(-sc*0.5,-sc*0.1);
-          ctx.bezierCurveTo(-sc*1.8,-sc*0.1,-sc*2,sc*1.2,-sc*0.8,sc*1.0);
-          ctx.strokeStyle="#c8852a";ctx.lineWidth=sc*0.45;ctx.lineCap="round";ctx.stroke();
-          ctx.strokeStyle="#d4a060";ctx.lineWidth=sc*0.2;ctx.stroke();
-          ctx.restore();
-        }
-
-        if(cr.type==="bird"){
-          cr.wait-=dt;
-          if(cr.wait>0)return;
-          cr.x+=cr.speed*dt;
-          cr.wing+=dt*8;
-          if(cr.x>70){cr.x=-70;cr.z=(Math.random()-0.5)*10;cr.wait=8+Math.random()*10;}
-          const bp=project(cr.x,cr.y,cr.z,c);
-          const sc=Math.max(0.5,bp.sc*c.zm*0.05);
-          const wingY=Math.sin(cr.wing)*sc*0.7;
-          ctx.save();ctx.translate(bp.sx,bp.sy);
-          ctx.strokeStyle="#334";ctx.lineWidth=sc*0.4;ctx.lineCap="round";
-          // Wings
-          ctx.beginPath();ctx.moveTo(-sc*1.2,wingY);ctx.quadraticCurveTo(-sc*0.5,0,0,0);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(sc*1.2,wingY);ctx.quadraticCurveTo(sc*0.5,0,0,0);ctx.stroke();
-          // Body
-          ctx.beginPath();ctx.ellipse(sc*0.3,0,sc*0.5,sc*0.2,0.2,0,Math.PI*2);
-          ctx.fillStyle="#445";ctx.fill();
-          ctx.restore();
-        }
-      });
-
-      const now=new Date();
-      const tStr=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
-      const avC=mapData.availableCount;
-      const ocP=mapData.occupiedPercent;
-      ctx.save();
-      const dp=0.5+Math.sin(t*4)*0.5;
-      ctx.beginPath();ctx.arc(15,17,3.5,0,Math.PI*2);ctx.fillStyle=`rgba(34,197,94,${0.3+dp*0.5})`;ctx.fill();
-      ctx.beginPath();ctx.arc(15,17,1.8,0,Math.PI*2);ctx.fillStyle="#22c55e";ctx.fill();
-      ctx.font="800 7px 'Nunito',sans-serif";ctx.textAlign="left";ctx.fillStyle="rgba(34,197,94,0.7)";ctx.fillText("LIVE",23,20);
-      ctx.font="500 8px 'Nunito',sans-serif";ctx.fillStyle="rgba(140,131,120,0.5)";ctx.fillText(tStr,44,20);
-      ctx.textAlign="right";ctx.font="600 8px 'Nunito',sans-serif";ctx.fillStyle="rgba(140,131,120,0.45)";ctx.fillText(`${ocP}% Occ · ${avC} open`,W-10,18);
-      ctx.restore();
+      // Operational status and controls are rendered as lightweight DOM overlays.
 
       frame=requestAnimationFrame(render);
     };
     render(performance.now());
     return()=>cancelAnimationFrame(frame);
-  },[critters,mapData,project]);
+  },[mapData,project]);
+
+  const resetView=()=>{
+    onSelect(null);
+    idleRef.current=0;
+    targetRef.current={ angle:34, tiltX:-1.0, cx:1, cz:-3, zoom:15 };
+  };
+  const adjustZoom=(delta)=>{
+    idleRef.current=0;
+    const t=targetRef.current;
+    t.zoom=Math.max(15,Math.min(100,t.zoom+delta));
+  };
+  const rotateMap=(delta)=>{
+    idleRef.current=0;
+    targetRef.current.angle+=delta;
+  };
+
+  const panelStyle={
+    position:"absolute",zIndex:3,background:"rgba(255,255,255,0.9)",backdropFilter:"blur(14px)",
+    border:"1px solid rgba(240,236,228,0.82)",boxShadow:"0 14px 36px rgba(26,23,20,0.10)",
+    borderRadius:14,fontFamily:P.fontBody,color:P.text,pointerEvents:"none",
+  };
+  const toolButtonStyle={
+    width:31,height:31,borderRadius:9,border:"1px solid rgba(201,168,76,0.24)",background:"rgba(255,255,255,0.94)",
+    color:P.sub,fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"auto",
+  };
+  const visibleStatuses=Object.entries(STATUS);
 
   return(
     <div style={{width:"100%",height:"100%",position:"relative"}}>
@@ -891,8 +769,33 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         onPointerLeave={onPointerCancel} onWheel={onWheel}
         onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}
         onContextMenu={onContextMenu}
-        style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:2,touchAction:"none",cursor:"grab"}}
+        style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:2,touchAction:"none",cursor:"grab",pointerEvents:"auto"}}
       />
+      <div style={{...panelStyle,top:12,left:12,padding:10,display:"flex",gap:6,alignItems:"center",pointerEvents:"auto"}}>
+        <button type="button" onClick={()=>adjustZoom(8)} title="Zoom in" style={toolButtonStyle}>+</button>
+        <button type="button" onClick={()=>adjustZoom(-8)} title="Zoom out" style={toolButtonStyle}>−</button>
+        <button type="button" onClick={()=>rotateMap(-18)} title="Rotate left" style={toolButtonStyle}>↺</button>
+        <button type="button" onClick={()=>rotateMap(18)} title="Rotate right" style={toolButtonStyle}>↻</button>
+        <button type="button" onClick={resetView} title="Reset map" style={{...toolButtonStyle,width:"auto",padding:"0 10px",letterSpacing:"0.04em",fontSize:10}}>RESET</button>
+      </div>
+      <div style={{...panelStyle,top:12,right:12,padding:"10px 12px",minWidth:150}}>
+        <div style={{fontSize:9,fontWeight:900,letterSpacing:"0.12em",textTransform:"uppercase",color:P.goldDark}}>Operations Map</div>
+        <div style={{display:"flex",gap:12,alignItems:"baseline",marginTop:3}}>
+          <div style={{fontSize:24,fontWeight:800,fontFamily:P.font,color:P.text,lineHeight:1}}>{mapData.occupiedPercent}%</div>
+          <div style={{fontSize:10,fontWeight:800,color:P.sub}}>occupied</div>
+        </div>
+        <div style={{fontSize:10,fontWeight:800,color:P.muted,marginTop:4}}>{mapData.availableCount} units open · {units.length} total</div>
+      </div>
+      <div style={{...panelStyle,left:12,bottom:12,padding:"10px 12px",maxWidth:"calc(100% - 24px)"}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {visibleStatuses.map(([key,status])=>(
+            <div key={key} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,fontWeight:900,color:statusFilter===key?status.color:P.sub,opacity:statusFilter&&statusFilter!==key?0.45:1}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:status.color,boxShadow:`0 0 0 3px ${status.color}18`}}/>{status.label}
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:10,fontWeight:800,color:P.muted,marginTop:8,lineHeight:1.45}}>Tap a door to select a unit. Drag to pan, pinch or scroll to zoom, right-drag to rotate.</div>
+      </div>
     </div>
   );
 }
@@ -1073,10 +976,10 @@ export default function App(){
             ].map(({v,l,c})=>(<div key={l} style={{minWidth:100}}><div style={{fontSize:32,fontWeight:700,color:c,fontFamily:P.font}}>{v}</div><div style={{fontSize:11,color:P.muted,fontFamily:P.fontBody,textTransform:"uppercase",letterSpacing:"0.08em"}}>{l}</div></div>))}
           </div>
           <div style={{width:"100%",display:"flex",flexDirection:isTablet?"row":"column",gap:12,marginTop:28}}>
-            <button onClick={()=>setMode("customer")} style={{flex:1,padding:"18px",borderRadius:P.radius,border:"none",background:`linear-gradient(135deg,${P.gold},#b8943f)`,color:"#fff",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,boxShadow:`0 4px 16px ${P.gold}25`}}>Rent a Unit</button>
-            <button onClick={()=>setMode("owner")} style={{flex:1,padding:"18px",borderRadius:P.radius,border:`1.5px solid ${P.border}`,background:P.card,color:P.text,fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>Owner Dashboard</button>
+            <button onClick={()=>setMode("owner")} style={{flex:1.15,padding:"18px",borderRadius:P.radius,border:"none",background:`linear-gradient(135deg,#1f2937,#111827)`,color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody,boxShadow:"0 14px 34px rgba(17,24,39,.16)"}}>Open Operations Command</button>
+            <button onClick={()=>setMode("customer")} style={{flex:0.85,padding:"18px",borderRadius:P.radius,border:`1.5px solid ${P.border}`,background:P.card,color:P.text,fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>Customer Rental Flow</button>
           </div>
-          <div style={{fontSize:11,color:P.muted,marginTop:18}}>24/7 Self-Service · Instant Access Codes</div>
+          <div style={{fontSize:11,color:P.muted,marginTop:18}}>Portfolio operations · occupancy, revenue, delinquency, and unit-level control</div>
         </div>
         <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:24,padding:isDesktop?20:16,minHeight:isTablet?680:420,overflow:"hidden",position:"relative"}}>
           <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={sf}/>
@@ -1116,14 +1019,10 @@ export default function App(){
         <button onClick={()=>setMode(null)} style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>← Back</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:isTablet?"32px":"20px 16px"}}>
-        <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Setup & Configuration</div>
+        <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Facility Administration</div>
         {[
-          {icon:"📐",title:"Starter Layout Draft",desc:"Open the builder and place a simple template around the current map center, then adjust each unit manually.",tag:"Template Based",tagColor:P.gold,action:openBuilder,cta:"Open Builder"},
-          {icon:"🏗️",title:"Manual Builder",desc:"Configure buildings, rows, and units step by step on a live map.",tag:"Full Control",tagColor:P.blue,action:openBuilder,cta:"Launch Manual Builder"},
-          {icon:"🎨",title:"Branding & Theme",desc:"Branding controls are next, but your facility address already saves from the builder.",tag:"In Progress",tagColor:P.success},
-          {icon:"💳",title:"Billing Setup",desc:"Stripe connection is not wired up yet. This demo does not process live payments today.",tag:"Not Yet Connected",tagColor:P.muted},
-          {icon:"🔐",title:"Smart Lock Integration",desc:"Device integrations are planned, but access codes here are still local demo values.",tag:"Planned",tagColor:P.muted},
-          {icon:"🤝",title:"Operations Assistant",desc:"No live AI copilot is connected yet. We removed the fake setup flow until there is a real backend behind it.",tag:"Honest Placeholder",tagColor:P.muted},
+          {icon:"▦",title:"Facility Layout",desc:"Maintain the operating map, unit mix, row labels, pricing, and availability shown in command center views.",tag:"Operational",tagColor:P.gold,action:openBuilder,cta:"Open Layout Editor"},
+          {icon:"◈",title:"Facility Profile",desc:"Address and facility identity are stored locally for this front-end prototype.",tag:"Local Config",tagColor:P.blue},
         ].map(({icon,title,desc,tag,tagColor,action,cta})=>(
           <button key={title} onClick={action} disabled={!action} style={{width:"100%",padding:16,borderRadius:P.radius,border:`1px solid ${action?tagColor+"35":P.border}`,background:P.card,marginBottom:10,cursor:action?"pointer":"default",display:"flex",gap:14,alignItems:"flex-start",textAlign:"left"}}>
             <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{icon}</div>
@@ -1175,6 +1074,12 @@ export default function App(){
   // ── CUSTOMER / OWNER FLOW ──
   const occupancy=Math.round(units.filter(u=>u.status!=="available").length/units.length*100);
   const monthlyRevenue=units.filter(u=>u.status!=="available"&&u.status!=="maintenance").reduce((s,u)=>s+Number(u.price||0),0);
+  const delinquentBalance=units.reduce((sum,u)=>sum+Number(u.balance||0),0);
+  const availableUnits=units.filter(u=>u.status==="available").length;
+  const occupiedUnits=units.filter(u=>u.status==="occupied"||u.status==="overdue").length;
+  const reservedUnits=units.filter(u=>u.status==="reserved").length;
+  const maintenanceUnits=units.filter(u=>u.status==="maintenance").length;
+  const pastDueUnits=units.filter(u=>u.status==="overdue").length;
   const customerStatuses=["available","reserved"];
   const shownStatuses=mode==="customer"?customerStatuses:Object.keys(STATUS);
   const mapFilter=mode==="customer"?(sf || "available"):sf;
@@ -1193,7 +1098,7 @@ export default function App(){
         <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:14,marginBottom:14}}>
           <div>
             <div style={{fontSize:12,color:P.sub,fontFamily:P.fontBody,fontWeight:800}}>{sel.label} · {sel.sqft} ft²</div>
-            <div style={{fontSize:12,color:P.muted,fontFamily:P.fontBody,marginTop:3,lineHeight:1.45}}>{mode==="customer"?sel.desc:"Live unit status, tenant, rent, and balance."}</div>
+            <div style={{fontSize:12,color:P.muted,fontFamily:P.fontBody,marginTop:3,lineHeight:1.45}}>{mode==="customer"?sel.desc:"Unit status, tenant, rent, and balance."}</div>
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{fontSize:34,fontWeight:700,color:P.gold,fontFamily:P.font,lineHeight:.85}}>${sel.price}</div>
@@ -1246,41 +1151,115 @@ export default function App(){
 
       <div style={{flex:1,overflow:step===0?"hidden":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
         {step===0&&(
-          <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(0,1fr) 360px":"1fr",height:"100%",minHeight:0}}>
-            <div style={{display:"flex",flexDirection:"column",minHeight:0,borderRight:isTablet&&sel?`1px solid ${P.border}`:"none"}}>
-              <div style={{padding:isTablet?"20px 24px 0":"8px 16px 0",flexShrink:0}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:isTablet?"center":"flex-start",gap:16,marginBottom:10,flexDirection:isTablet?"row":"column"}}>
-                  <div>
-                    <div style={{fontSize:isTablet?24:16,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>{mode==="owner"?"Facility Overview":"Find Your Unit"}</div>
-                    <div style={{fontSize:isTablet?13:11,color:P.sub,fontFamily:P.fontBody}}>{isTablet?"Desktop and iPad layout with live map plus unit details.":"Tap a unit to inspect pricing and availability."}</div>
-                  </div>
-                  {isTablet&&(
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(88px,1fr))",gap:10,minWidth:300}}>
-                      {[
-                        {v:units.filter(u=>u.status==="available").length,l:mode==="owner"?"Open":"Ready",c:STATUS.available.color},
-                        {v:mode==="owner"?`$${monthlyRevenue.toLocaleString()}`:units.length,l:mode==="owner"?"Revenue":"Units",c:P.text},
-                        {v:`${occupancy}%`,l:"Occupied",c:STATUS.occupied.color},
-                      ].map(({v,l,c})=>(<div key={l} style={{padding:"10px 12px",borderRadius:12,background:P.borderLight,border:`1px solid ${P.border}`}}><div style={{fontSize:24,fontWeight:700,color:c,fontFamily:P.font}}>{v}</div><div style={{fontSize:10,color:P.muted,fontWeight:700,fontFamily:P.fontBody,textTransform:"uppercase",letterSpacing:"0.08em"}}>{l}</div></div>))}
+          mode==="owner"?(
+            <div style={{height:"100%",overflow:"auto",padding:isTablet?"24px":"16px",boxSizing:"border-box"}}>
+              <div style={{maxWidth:1440,margin:"0 auto",display:"grid",gridTemplateColumns:isDesktop?"minmax(0,1.45fr) 420px":"1fr",gap:18,alignItems:"start"}}>
+                <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+                  <div style={{background:"linear-gradient(135deg,#111827,#273244)",borderRadius:24,padding:isTablet?24:18,color:"#fff",boxShadow:"0 20px 60px rgba(17,24,39,.16)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:isTablet?"center":"flex-start",flexDirection:isTablet?"row":"column"}}>
+                      <div>
+                        <div style={{fontSize:10,fontWeight:900,letterSpacing:"0.16em",textTransform:"uppercase",color:"rgba(255,255,255,.58)",fontFamily:P.fontBody}}>Operations Command Center</div>
+                        <div style={{fontSize:isTablet?34:26,fontWeight:800,fontFamily:P.font,letterSpacing:"-.02em",marginTop:4}}>{facility.name}</div>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,.62)",fontFamily:P.fontBody,marginTop:4}}>{facility.address}</div>
+                      </div>
+                      <button onClick={openBuilder} style={{padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.10)",color:"#fff",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,letterSpacing:".04em",textTransform:"uppercase"}}>Edit Layout</button>
                     </div>
-                  )}
+                    <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(4,minmax(0,1fr))":"repeat(2,minmax(0,1fr))",gap:10,marginTop:18}}>
+                      {[
+                        {v:`${occupancy}%`,l:"Occupancy",s:`${occupiedUnits} occupied / ${units.length} units`,c:"#93c5fd"},
+                        {v:`$${monthlyRevenue.toLocaleString()}`,l:"Monthly rent roll",s:"Active and reserved inventory",c:"#fde68a"},
+                        {v:`$${delinquentBalance.toLocaleString()}`,l:"Delinquent balance",s:`${pastDueUnits} unit${pastDueUnits===1?"":"s"} past due`,c:pastDueUnits?"#fca5a5":"#86efac"},
+                        {v:availableUnits,l:"Vacancies",s:`${reservedUnits} pending move-in`,c:"#86efac"},
+                      ].map(({v,l,s,c})=>(<div key={l} style={{padding:14,borderRadius:16,background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.11)"}}><div style={{fontSize:isTablet?27:22,fontWeight:900,color:c,fontFamily:P.fontBody,lineHeight:1}}>{v}</div><div style={{fontSize:10,fontWeight:900,letterSpacing:".08em",textTransform:"uppercase",color:"rgba(255,255,255,.82)",fontFamily:P.fontBody,marginTop:8}}>{l}</div><div style={{fontSize:10,color:"rgba(255,255,255,.52)",fontFamily:P.fontBody,marginTop:3}}>{s}</div></div>))}
+                    </div>
+                  </div>
+
+                  <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(0,1fr) 300px":"1fr",gap:16,minHeight:isTablet?560:"auto"}}>
+                    <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:22,overflow:"hidden",minHeight:isTablet?560:420,display:"flex",flexDirection:"column"}}>
+                      <div style={{padding:"14px 16px",borderBottom:`1px solid ${P.border}`,display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+                        <div><div style={{fontSize:16,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>Facility Map</div><div style={{fontSize:11,color:P.sub,fontFamily:P.fontBody}}>Filter units by operating status, then select a door for account detail.</div></div>
+                        <div style={{display:"flex",gap:6,overflowX:"auto",maxWidth:isTablet?"none":"100%"}}>
+                          <button onClick={()=>setSf(null)} style={{padding:"7px 11px",borderRadius:999,border:`1px solid ${!sf?P.gold:P.border}`,background:!sf?P.goldLight:P.card,color:!sf?P.goldDark:P.muted,fontSize:10,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap"}}>All</button>
+                          {shownStatuses.map((k)=>{const v=STATUS[k];return <button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:"7px 11px",borderRadius:999,border:`1px solid ${sf===k?v.color+"55":P.border}`,background:sf===k?v.color+"12":P.card,color:sf===k?v.color:P.muted,fontSize:10,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap"}}>{v.label}</button>})}
+                        </div>
+                      </div>
+                      <div style={{flex:1,minHeight:420,position:"relative"}}>
+                        <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={mapFilter}/>
+                        <button onClick={()=>setFs(true)} style={{position:"absolute",right:12,bottom:12,width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.92)",border:`1px solid ${P.border}`,cursor:"pointer",color:P.sub}}>⛶</button>
+                      </div>
+                    </div>
+
+                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                      {detailCard||<div style={{padding:22,borderRadius:22,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 12px 36px rgba(17,24,39,.05)"}}><div style={{fontSize:10,fontWeight:900,letterSpacing:".14em",textTransform:"uppercase",color:P.gold,fontFamily:P.fontBody}}>Unit Control</div><div style={{fontSize:23,fontWeight:800,color:P.text,fontFamily:P.font,marginTop:5}}>Select a unit</div><div style={{fontSize:12,color:P.sub,lineHeight:1.55,fontFamily:P.fontBody,marginTop:6}}>Click any unit to review rent, tenant contact, balance, and status without leaving the command center.</div></div>}
+                      <div style={{padding:16,borderRadius:20,background:P.card,border:`1px solid ${P.border}`}}>
+                        <div style={{fontSize:12,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:10}}>Collections Queue</div>
+                        {units.filter(u=>u.status==="overdue").slice(0,4).map(u=>(<button key={u.id} onClick={()=>setSelId(u.id)} style={{width:"100%",padding:"10px 0",border:"none",borderTop:`1px solid ${P.border}`,background:"transparent",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",fontFamily:P.fontBody}}><span style={{fontSize:12,fontWeight:900,color:P.text}}>Unit {u.id}</span><span style={{fontSize:12,fontWeight:900,color:P.danger}}>${u.balance}</span></button>))}
+                        {!pastDueUnits&&<div style={{fontSize:12,color:P.sub,fontFamily:P.fontBody}}>No delinquent units in the current dataset.</div>}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,flexWrap:isTablet?"wrap":"nowrap"}}>
-                  <button onClick={()=>setSf(null)} style={{padding:isTablet?"7px 12px":"5px 10px",borderRadius:999,border:`1px solid ${!sf?P.gold:P.border}`,background:!sf?P.goldLight:P.card,color:!sf?P.goldDark:P.muted,fontSize:isTablet?11:9,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0}}>All Units</button>
-                  {shownStatuses.map((k)=>{const v=STATUS[k];return <button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:isTablet?"7px 12px":"6px 11px",borderRadius:999,border:`1px solid ${sf===k?v.color+"40":P.border}`,background:sf===k?v.color+"12":P.card,color:sf===k?v.color:P.muted,fontSize:isTablet?11:10,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0,display:"flex",alignItems:"center",gap:5}}><span style={{width:6,height:6,borderRadius:"50%",background:v.color}}/>{v.label}</button>})}
+
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                  <div style={{padding:18,borderRadius:22,background:P.card,border:`1px solid ${P.border}`,boxShadow:"0 12px 36px rgba(17,24,39,.05)"}}>
+                    <div style={{fontSize:13,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:12}}>Operating Snapshot</div>
+                    {[
+                      ["Move-ins pending",reservedUnits,"Reserved units awaiting completion"],
+                      ["Vacancy exposure",availableUnits,`${Math.round(availableUnits/units.length*100)}% of inventory open`],
+                      ["Maintenance holds",maintenanceUnits,"Units withheld from rental flow"],
+                      ["Collections risk",pastDueUnits,`$${delinquentBalance.toLocaleString()} outstanding`],
+                    ].map(([label,value,desc])=>(<div key={label} style={{padding:"12px 0",borderTop:`1px solid ${P.border}`}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><span style={{fontSize:12,fontWeight:900,color:P.text,fontFamily:P.fontBody}}>{label}</span><span style={{fontSize:18,fontWeight:900,color:label==="Collections risk"&&pastDueUnits?P.danger:P.text,fontFamily:P.fontBody}}>{value}</span></div><div style={{fontSize:10,color:P.sub,fontFamily:P.fontBody,marginTop:2}}>{desc}</div></div>))}
+                  </div>
+
+                  <div style={{padding:18,borderRadius:22,background:P.card,border:`1px solid ${P.border}`}}>
+                    <div style={{fontSize:13,fontWeight:900,color:P.text,fontFamily:P.fontBody,marginBottom:12}}>Recent Account Activity</div>
+                    {[
+                      [`${reservedUnits} reservation${reservedUnits===1?"":"s"} awaiting move-in paperwork`,"Move-in pipeline"],
+                      [`${pastDueUnits} tenant${pastDueUnits===1?"":"s"} flagged for collections follow-up`,"Delinquency"],
+                      [`${maintenanceUnits} unit${maintenanceUnits===1?"":"s"} excluded from public rental flow`,"Maintenance"],
+                      [`${availableUnits} rentable unit${availableUnits===1?"":"s"} visible to customers`,"Vacancy"],
+                    ].map(([text,label])=>(<div key={label} style={{padding:"11px 0",borderTop:`1px solid ${P.border}`}}><div style={{fontSize:10,fontWeight:900,letterSpacing:".1em",textTransform:"uppercase",color:P.gold,fontFamily:P.fontBody}}>{label}</div><div style={{fontSize:12,color:P.text,fontWeight:800,fontFamily:P.fontBody,marginTop:3,lineHeight:1.4}}>{text}</div></div>))}
+                  </div>
                 </div>
-              </div>
-              <div style={{flex:1,minHeight:isTablet?520:0,position:"relative",padding:isTablet?"0 24px 24px":"0"}}>
-                <div style={{height:"100%",minHeight:isTablet?520:0,border:isTablet?`1px solid ${P.border}`:"none",borderRadius:isTablet?22:0,overflow:"hidden",background:P.card}}>
-                  <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={mapFilter}/>
-                </div>
-                <div style={{position:"absolute",bottom:isTablet?36:8,right:isTablet?36:8,display:"flex",gap:6,zIndex:5}}>
-                  <button onClick={()=>setFs(true)} style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.9)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:P.sub}}>⛶</button>
-                </div>
-                {sel&&<button onClick={()=>setSelId(null)} style={{position:"absolute",bottom:isTablet?36:8,left:isTablet?36:8,padding:isTablet?"8px 14px":"6px 12px",borderRadius:10,background:"rgba(255,255,255,0.9)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,color:P.sub,fontSize:isTablet?11:10,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,zIndex:5}}>↑ Zoom Out</button>}
               </div>
             </div>
-            {isTablet?(detailCard||<div style={{padding:"24px",background:P.card,display:"flex",alignItems:"center",justifyContent:"center",color:P.sub,fontFamily:P.fontBody}}><div style={{maxWidth:240,textAlign:"center"}}><div style={{fontSize:24,marginBottom:10}}>🗺️</div><div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:6}}>Select a unit</div><div style={{fontSize:13,lineHeight:1.6}}>Choose any building on the map to review pricing, features, and tenant details.</div></div></div>):detailCard}
-          </div>
+          ):(
+            <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(0,1fr) 360px":"1fr",height:"100%",minHeight:0}}>
+              <div style={{display:"flex",flexDirection:"column",minHeight:0,borderRight:isTablet&&sel?`1px solid ${P.border}`:"none"}}>
+                <div style={{padding:isTablet?"20px 24px 0":"8px 16px 0",flexShrink:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:isTablet?"center":"flex-start",gap:16,marginBottom:10,flexDirection:isTablet?"row":"column"}}>
+                    <div>
+                      <div style={{fontSize:isTablet?24:16,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:4}}>Find Your Unit</div>
+                      <div style={{fontSize:isTablet?13:11,color:P.sub,fontFamily:P.fontBody}}>Choose an available unit, review pricing, and complete your rental.</div>
+                    </div>
+                    {isTablet&&(
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(88px,1fr))",gap:10,minWidth:300}}>
+                        {[
+                          {v:availableUnits,l:"Ready",c:STATUS.available.color},
+                          {v:units.length,l:"Units",c:P.text},
+                          {v:`${occupancy}%`,l:"Occupied",c:STATUS.occupied.color},
+                        ].map(({v,l,c})=>(<div key={l} style={{padding:"10px 12px",borderRadius:12,background:P.borderLight,border:`1px solid ${P.border}`}}><div style={{fontSize:24,fontWeight:700,color:c,fontFamily:P.font}}>{v}</div><div style={{fontSize:10,color:P.muted,fontWeight:700,fontFamily:P.fontBody,textTransform:"uppercase",letterSpacing:"0.08em"}}>{l}</div></div>))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,flexWrap:isTablet?"wrap":"nowrap"}}>
+                    <button onClick={()=>setSf(null)} style={{padding:isTablet?"7px 12px":"5px 10px",borderRadius:999,border:`1px solid ${!sf?P.gold:P.border}`,background:!sf?P.goldLight:P.card,color:!sf?P.goldDark:P.muted,fontSize:isTablet?11:9,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0}}>All Available</button>
+                    {shownStatuses.map((k)=>{const v=STATUS[k];return <button key={k} onClick={()=>setSf(sf===k?null:k)} style={{padding:isTablet?"7px 12px":"6px 11px",borderRadius:999,border:`1px solid ${sf===k?v.color+"40":P.border}`,background:sf===k?v.color+"12":P.card,color:sf===k?v.color:P.muted,fontSize:isTablet?11:10,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody,whiteSpace:"nowrap",flexShrink:0,display:"flex",alignItems:"center",gap:5}}><span style={{width:6,height:6,borderRadius:"50%",background:v.color}}/>{v.label}</button>})}
+                  </div>
+                </div>
+                <div style={{flex:1,minHeight:isTablet?520:0,position:"relative",padding:isTablet?"0 24px 24px":"0"}}>
+                  <div style={{height:"100%",minHeight:isTablet?520:0,border:isTablet?`1px solid ${P.border}`:"none",borderRadius:isTablet?22:0,overflow:"hidden",background:P.card}}>
+                    <FacilityMap units={units} selId={selId} onSelect={setSelId} statusFilter={mapFilter}/>
+                  </div>
+                  <div style={{position:"absolute",bottom:isTablet?36:8,right:isTablet?36:8,display:"flex",gap:6,zIndex:5}}>
+                    <button onClick={()=>setFs(true)} style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.9)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:P.sub}}>⛶</button>
+                  </div>
+                  {sel&&<button onClick={()=>setSelId(null)} style={{position:"absolute",bottom:isTablet?36:8,left:isTablet?36:8,padding:isTablet?"8px 14px":"6px 12px",borderRadius:10,background:"rgba(255,255,255,0.9)",backdropFilter:"blur(8px)",border:`1px solid ${P.gold}20`,color:P.sub,fontSize:isTablet?11:10,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody,zIndex:5}}>↑ Zoom Out</button>}
+                </div>
+              </div>
+              {isTablet?(detailCard||<div style={{padding:"24px",background:P.card,display:"flex",alignItems:"center",justifyContent:"center",color:P.sub,fontFamily:P.fontBody}}><div style={{maxWidth:240,textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:6}}>Select a unit</div><div style={{fontSize:13,lineHeight:1.6}}>Choose an available unit to review pricing and features.</div></div></div>):detailCard}
+            </div>
+          )
         )}
         {step===1&&<Step2 formData={form} setForm={setForm}/>}
         {step===2&&sel&&<Step3 formData={form} setForm={setForm} unit={sel}/>}
