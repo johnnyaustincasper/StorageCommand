@@ -566,6 +566,14 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
       const projected=[];
       const curSel=selRef.current;
       const curFilter=filterRef.current;
+      const rowDoorDirection=(unit)=>{
+        const row=String(unit.id||"").split("-")[0];
+        if(/[ABC]1$/.test(row))return -1;
+        if(/[ABC]2$/.test(row))return 1;
+        const streetZ=[-11.3,-8.7,-5.8,-3.2,-0.3,2.3];
+        const nearest=streetZ.reduce((best,z)=>Math.abs(z-unit.z)<Math.abs(best-unit.z)?z:best,streetZ[0]);
+        return nearest<unit.z?-1:1;
+      };
 
       sorted.forEach(unit=>{
         const hw=unit.w/2, hd=unit.d/2;
@@ -644,22 +652,28 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
           ctx.strokeStyle="rgba(0,0,0,0.22)";ctx.lineWidth=1;
           ctx.beginPath();ctx.moveTo(corners[3].sx,corners[3].sy);ctx.lineTo(corners[2].sx,corners[2].sy);ctx.stroke();
 
-          // Roll-up door on the drive side with a small status strip instead of toy-colored buildings.
-          const d1=project(unit.x-hw*0.46,0.03,unit.z-hd-0.012,c),d2=project(unit.x+hw*0.46,0.03,unit.z-hd-0.012,c);
-          const d3=project(unit.x-hw*0.46,unitH*0.58,unit.z-hd-0.012,c),d4=project(unit.x+hw*0.46,unitH*0.58,unit.z-hd-0.012,c);
-          ctx.beginPath();ctx.moveTo(d1.sx,d1.sy);ctx.lineTo(d2.sx,d2.sy);ctx.lineTo(d4.sx,d4.sy);ctx.lineTo(d3.sx,d3.sy);ctx.closePath();
-          const dg=ctx.createLinearGradient(d1.sx,d1.sy,d4.sx,d4.sy);
-          dg.addColorStop(0,rgba(shade(door,0.82),0.9));dg.addColorStop(0.55,rgba(shade(door,1.03),0.92));dg.addColorStop(1,rgba(shade(door,0.72),0.9));
-          ctx.fillStyle=dg;ctx.fill();
-          ctx.strokeStyle="rgba(31,41,55,0.34)";ctx.lineWidth=0.8;ctx.stroke();
-          ctx.strokeStyle="rgba(255,255,255,0.18)";ctx.lineWidth=0.55;
-          for(let dl=1;dl<=5;dl++){
-            const f=dl/6;
-            ctx.beginPath();ctx.moveTo(d1.sx+(d3.sx-d1.sx)*f,d1.sy+(d3.sy-d1.sy)*f);ctx.lineTo(d2.sx+(d4.sx-d2.sx)*f,d2.sy+(d4.sy-d2.sy)*f);ctx.stroke();
+          // Roll-up door faces the nearest drive lane/street, not always the same world side.
+          const doorSide=rowDoorDirection(unit);
+          const doorVisible=doorSide<0?showFront:showBack;
+          if(doorVisible){
+            const doorZ=unit.z+doorSide*hd+doorSide*0.012;
+            const d1=project(unit.x-hw*0.46,0.03,doorZ,c),d2=project(unit.x+hw*0.46,0.03,doorZ,c);
+            const d3=project(unit.x-hw*0.46,unitH*0.58,doorZ,c),d4=project(unit.x+hw*0.46,unitH*0.58,doorZ,c);
+            ctx.beginPath();ctx.moveTo(d1.sx,d1.sy);ctx.lineTo(d2.sx,d2.sy);ctx.lineTo(d4.sx,d4.sy);ctx.lineTo(d3.sx,d3.sy);ctx.closePath();
+            const dg=ctx.createLinearGradient(d1.sx,d1.sy,d4.sx,d4.sy);
+            dg.addColorStop(0,rgba(shade(door,0.82),0.9));dg.addColorStop(0.55,rgba(shade(door,1.03),0.92));dg.addColorStop(1,rgba(shade(door,0.72),0.9));
+            ctx.fillStyle=dg;ctx.fill();
+            ctx.strokeStyle="rgba(31,41,55,0.34)";ctx.lineWidth=0.8;ctx.stroke();
+            ctx.strokeStyle="rgba(255,255,255,0.18)";ctx.lineWidth=0.55;
+            for(let dl=1;dl<=5;dl++){
+              const f=dl/6;
+              ctx.beginPath();ctx.moveTo(d1.sx+(d3.sx-d1.sx)*f,d1.sy+(d3.sy-d1.sy)*f);ctx.lineTo(d2.sx+(d4.sx-d2.sx)*f,d2.sy+(d4.sy-d2.sy)*f);ctx.stroke();
+            }
+            const accentZ=unit.z+doorSide*hd+doorSide*0.018;
+            const a1=project(unit.x-hw*0.46,unitH*0.61,accentZ,c),a2=project(unit.x+hw*0.46,unitH*0.61,accentZ,c);
+            ctx.beginPath();ctx.moveTo(a1.sx,a1.sy);ctx.lineTo(a2.sx,a2.sy);
+            ctx.strokeStyle=rgba(accent,isSel?0.95:0.55);ctx.lineWidth=Math.max(1,a1.sc*c.zm*0.035);ctx.stroke();
           }
-          const a1=project(unit.x-hw*0.46,unitH*0.61,unit.z-hd-0.018,c),a2=project(unit.x+hw*0.46,unitH*0.61,unit.z-hd-0.018,c);
-          ctx.beginPath();ctx.moveTo(a1.sx,a1.sy);ctx.lineTo(a2.sx,a2.sy);
-          ctx.strokeStyle=rgba(accent,isSel?0.95:0.55);ctx.lineWidth=Math.max(1,a1.sc*c.zm*0.035);ctx.stroke();
         }
 
         if(!isDim){
