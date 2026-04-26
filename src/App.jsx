@@ -575,62 +575,39 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         return nearest<unit.z?-1:1;
       };
 
-      sorted.forEach(unit=>{
+      // Draw one continuous low building shell per A/B/C block. Individual units are doors
+      // on opposite long sides of that building, like a real self-storage row.
+      const drawBuildingShell=(groupUnits)=>{
+        if(!groupUnits.length)return;
         const visualGapClose=0.28;
-        const hw=(unit.w+visualGapClose)/2, hd=unit.d/2;
-        const isSel=unit.id===curSel;
-        const isDim=(curFilter&&unit.status!==curFilter);
-        const st=STATUS[unit.status];
-        const accent=hx(st.color);
-        const alpha=isDim?0.18:isSel?1.0:0.92;
-        const unitH=isSel?1.02:0.98;
-        const uhh=unitH/2;
-        const wall=[213,207,194];
-        const roof=[178,173,160];
-        const door=[228,224,214];
-
+        const unitH=0.98, uhh=unitH/2;
+        const wall=[213,207,194], roof=[178,173,160];
+        const x1=Math.min(...groupUnits.map(u=>u.x-(u.w+visualGapClose)/2));
+        const x2=Math.max(...groupUnits.map(u=>u.x+(u.w+visualGapClose)/2));
+        const z1=Math.min(...groupUnits.map(u=>u.z-u.d/2));
+        const z2=Math.max(...groupUnits.map(u=>u.z+u.d/2));
         const corners=[
-          [-hw,-uhh,-hd],[hw,-uhh,-hd],[hw,uhh,-hd],[-hw,uhh,-hd],
-          [-hw,-uhh,hd],[hw,-uhh,hd],[hw,uhh,hd],[-hw,uhh,hd],
-        ].map(([dx,dy,dz])=>project(unit.x+dx,unitH/2+dy,unit.z+dz,c));
+          [x1,-uhh,z1],[x2,-uhh,z1],[x2,uhh,z1],[x1,uhh,z1],
+          [x1,-uhh,z2],[x2,-uhh,z2],[x2,uhh,z2],[x1,uhh,z2],
+        ].map(([x,dy,z])=>project(x,unitH/2+dy,z,c));
 
-        if(!isDim){
-          const sh=[[-hw,0,-hd],[hw,0,-hd],[hw,0,hd],[-hw,0,hd]].map(([dx,,dz])=>project(unit.x+dx+0.32,-0.025,unit.z+dz+0.24,c));
-          ctx.save();ctx.filter="blur(5px)";ctx.beginPath();ctx.moveTo(sh[0].sx+3,sh[0].sy+3);sh.slice(1).forEach(p=>ctx.lineTo(p.sx+3,p.sy+3));ctx.closePath();
-          ctx.fillStyle=isSel?"rgba(31,41,55,0.2)":"rgba(0,0,0,0.14)";ctx.fill();ctx.restore();
-        }
-
-        if(isSel){
-          const gc=project(unit.x,0.04,unit.z,c);
-          const gr=Math.max(18,corners[3].sc*c.zm*0.34);
-          const glow=ctx.createRadialGradient(gc.sx,gc.sy,0,gc.sx,gc.sy,gr);
-          glow.addColorStop(0,"rgba(201,168,76,0.28)");glow.addColorStop(0.45,"rgba(201,168,76,0.12)");glow.addColorStop(1,"rgba(201,168,76,0)");
-          ctx.fillStyle=glow;ctx.fillRect(gc.sx-gr,gc.sy-gr,gr*2,gr*2);
-        }
+        const sh=[[x1,0,z1],[x2,0,z1],[x2,0,z2],[x1,0,z2]].map(([x,,z])=>project(x+0.42,-0.025,z+0.28,c));
+        ctx.save();ctx.filter="blur(7px)";ctx.beginPath();ctx.moveTo(sh[0].sx+4,sh[0].sy+4);sh.slice(1).forEach(pt=>ctx.lineTo(pt.sx+4,pt.sy+4));ctx.closePath();ctx.fillStyle="rgba(0,0,0,0.16)";ctx.fill();ctx.restore();
 
         const ang2=c.angle*Math.PI/180;
         const camDirX=Math.sin(ang2), camDirZ=Math.cos(ang2);
-        const showFront=camDirZ>0;
-        const showBack=camDirZ<0;
-        const showLeft=camDirX<0;
-        const showRight=camDirX>0;
-
+        const showFront=camDirZ>0, showBack=camDirZ<0, showLeft=camDirX<0, showRight=camDirX>0;
         const drawFace=(pts,br,isTop)=>{
-          ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);pts.slice(1).forEach(p=>ctx.lineTo(p.sx,p.sy));ctx.closePath();
-          if(isTop&&!isDim){
+          ctx.beginPath();ctx.moveTo(pts[0].sx,pts[0].sy);pts.slice(1).forEach(pt=>ctx.lineTo(pt.sx,pt.sy));ctx.closePath();
+          if(isTop){
             const tg=ctx.createLinearGradient(pts[0].sx,pts[0].sy,pts[2].sx,pts[2].sy);
-            tg.addColorStop(0,rgba(shade(roof,br*1.12),alpha));
-            tg.addColorStop(0.55,rgba(shade(roof,br*1.02),alpha));
-            tg.addColorStop(1,rgba(shade(roof,br*0.92),alpha));
+            tg.addColorStop(0,rgba(shade(roof,br*1.12),0.94));
+            tg.addColorStop(0.55,rgba(shade(roof,br*1.02),0.94));
+            tg.addColorStop(1,rgba(shade(roof,br*0.92),0.94));
             ctx.fillStyle=tg;
-          }else{
-            ctx.fillStyle=rgba(shade(wall,br),alpha);
-          }
-          ctx.fill();
-          if(isSel){ctx.strokeStyle="rgba(255,255,255,0.92)";ctx.lineWidth=1.2;ctx.stroke();ctx.strokeStyle="rgba(201,168,76,0.72)";ctx.lineWidth=2.1;ctx.stroke();}
-          else if(!isDim){ctx.strokeStyle=isTop?"rgba(255,255,255,0.13)":"rgba(33,37,41,0.32)";ctx.lineWidth=isTop?0.7:0.9;ctx.stroke();}
+          }else ctx.fillStyle=rgba(shade(wall,br),0.95);
+          ctx.fill();ctx.strokeStyle=isTop?"rgba(255,255,255,0.18)":"rgba(33,37,41,0.24)";ctx.lineWidth=isTop?0.9:1;ctx.stroke();
         };
-
         if(!showFront)drawFace([corners[0],corners[1],corners[2],corners[3]],0.55,false);
         if(!showBack) drawFace([corners[5],corners[4],corners[7],corners[6]],0.45,false);
         if(!showLeft) drawFace([corners[4],corners[0],corners[3],corners[7]],0.50,false);
@@ -641,39 +618,73 @@ function FacilityMap({ units, selId, onSelect, statusFilter }) {
         if(showRight) drawFace([corners[1],corners[5],corners[6],corners[2]],0.82,false);
         drawFace([corners[3],corners[2],corners[6],corners[7]],1.0,true);
 
-        if(!isDim){
-          // Roof seams / coping so the units feel like real metal buildings.
-          ctx.strokeStyle="rgba(255,255,255,0.16)";ctx.lineWidth=0.7;
-          for(let i=1;i<=3;i++){
-            const f=i/4;
-            const a={sx:corners[3].sx+(corners[2].sx-corners[3].sx)*f,sy:corners[3].sy+(corners[2].sy-corners[3].sy)*f};
-            const b={sx:corners[7].sx+(corners[6].sx-corners[7].sx)*f,sy:corners[7].sy+(corners[6].sy-corners[7].sy)*f};
-            ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke();
-          }
-          ctx.strokeStyle="rgba(0,0,0,0.22)";ctx.lineWidth=1;
-          ctx.beginPath();ctx.moveTo(corners[3].sx,corners[3].sy);ctx.lineTo(corners[2].sx,corners[2].sy);ctx.stroke();
+        ctx.strokeStyle="rgba(255,255,255,0.18)";ctx.lineWidth=0.7;
+        for(let i=1;i<=7;i++){
+          const f=i/8;
+          const a={sx:corners[3].sx+(corners[2].sx-corners[3].sx)*f,sy:corners[3].sy+(corners[2].sy-corners[3].sy)*f};
+          const b={sx:corners[7].sx+(corners[6].sx-corners[7].sx)*f,sy:corners[7].sy+(corners[6].sy-corners[7].sy)*f};
+          ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke();
+        }
+      };
 
-          // Roll-up door faces the nearest drive lane/street, not always the same world side.
-          // Unit shells intentionally overlap slightly so each row reads as one joined building,
-          // while the door panels/labels remain individually selectable.
+      const buildingGroups=Object.values(units.reduce((acc,u)=>{
+        const key=String(u.id||"").charAt(0)||"X";
+        (acc[key] ||= []).push(u);
+        return acc;
+      },{})).sort((a,b)=>{
+        const az=a.reduce((s,u)=>s+u.z,0)/a.length, bz=b.reduce((s,u)=>s+u.z,0)/b.length;
+        return bz-az;
+      });
+      buildingGroups.forEach(drawBuildingShell);
+
+      sorted.forEach(unit=>{
+        const visualGapClose=0.28;
+        const hw=(unit.w+visualGapClose)/2, hd=unit.d/2;
+        const isSel=unit.id===curSel;
+        const isDim=(curFilter&&unit.status!==curFilter);
+        const st=STATUS[unit.status];
+        const accent=hx(st.color);
+        const unitH=isSel?1.02:0.98;
+        const uhh=unitH/2;
+        const door=[228,224,214];
+
+        const corners=[
+          [-hw,-uhh,-hd],[hw,-uhh,-hd],[hw,uhh,-hd],[-hw,uhh,-hd],
+          [-hw,-uhh,hd],[hw,-uhh,hd],[hw,uhh,hd],[-hw,uhh,hd],
+        ].map(([dx,dy,dz])=>project(unit.x+dx,unitH/2+dy,unit.z+dz,c));
+
+        if(isSel){
+          const gc=project(unit.x,0.04,unit.z,c);
+          const gr=Math.max(18,corners[3].sc*c.zm*0.34);
+          const glow=ctx.createRadialGradient(gc.sx,gc.sy,0,gc.sx,gc.sy,gr);
+          glow.addColorStop(0,"rgba(201,168,76,0.32)");glow.addColorStop(0.45,"rgba(201,168,76,0.14)");glow.addColorStop(1,"rgba(201,168,76,0)");
+          ctx.fillStyle=glow;ctx.fillRect(gc.sx-gr,gc.sy-gr,gr*2,gr*2);
+        }
+
+        const ang2=c.angle*Math.PI/180;
+        const camDirZ=Math.cos(ang2);
+        const showFront=camDirZ>0;
+        const showBack=camDirZ<0;
+
+        if(!isDim){
           const doorSide=rowDoorDirection(unit);
           const doorVisible=doorSide<0?showFront:showBack;
           if(doorVisible){
             const doorZ=unit.z+doorSide*hd+doorSide*0.012;
-            const d1=project(unit.x-hw*0.46,0.03,doorZ,c),d2=project(unit.x+hw*0.46,0.03,doorZ,c);
-            const d3=project(unit.x-hw*0.46,unitH*0.78,doorZ,c),d4=project(unit.x+hw*0.46,unitH*0.78,doorZ,c);
+            const d1=project(unit.x-hw*0.40,0.03,doorZ,c),d2=project(unit.x+hw*0.40,0.03,doorZ,c);
+            const d3=project(unit.x-hw*0.40,unitH*0.80,doorZ,c),d4=project(unit.x+hw*0.40,unitH*0.80,doorZ,c);
             ctx.beginPath();ctx.moveTo(d1.sx,d1.sy);ctx.lineTo(d2.sx,d2.sy);ctx.lineTo(d4.sx,d4.sy);ctx.lineTo(d3.sx,d3.sy);ctx.closePath();
             const dg=ctx.createLinearGradient(d1.sx,d1.sy,d4.sx,d4.sy);
-            dg.addColorStop(0,rgba(shade(door,0.82),0.9));dg.addColorStop(0.55,rgba(shade(door,1.03),0.92));dg.addColorStop(1,rgba(shade(door,0.72),0.9));
+            dg.addColorStop(0,rgba(shade(door,0.86),0.94));dg.addColorStop(0.55,rgba(shade(door,1.03),0.96));dg.addColorStop(1,rgba(shade(door,0.82),0.94));
             ctx.fillStyle=dg;ctx.fill();
-            ctx.strokeStyle="rgba(31,41,55,0.34)";ctx.lineWidth=0.8;ctx.stroke();
-            ctx.strokeStyle="rgba(255,255,255,0.18)";ctx.lineWidth=0.55;
+            ctx.strokeStyle=isSel?"rgba(201,168,76,0.95)":"rgba(31,41,55,0.26)";ctx.lineWidth=isSel?1.8:0.8;ctx.stroke();
+            ctx.strokeStyle="rgba(255,255,255,0.22)";ctx.lineWidth=0.55;
             for(let dl=1;dl<=5;dl++){
               const f=dl/6;
               ctx.beginPath();ctx.moveTo(d1.sx+(d3.sx-d1.sx)*f,d1.sy+(d3.sy-d1.sy)*f);ctx.lineTo(d2.sx+(d4.sx-d2.sx)*f,d2.sy+(d4.sy-d2.sy)*f);ctx.stroke();
             }
             const accentZ=unit.z+doorSide*hd+doorSide*0.018;
-            const a1=project(unit.x-hw*0.46,unitH*0.82,accentZ,c),a2=project(unit.x+hw*0.46,unitH*0.82,accentZ,c);
+            const a1=project(unit.x-hw*0.40,unitH*0.84,accentZ,c),a2=project(unit.x+hw*0.40,unitH*0.84,accentZ,c);
             ctx.beginPath();ctx.moveTo(a1.sx,a1.sy);ctx.lineTo(a2.sx,a2.sy);
             ctx.strokeStyle=rgba(accent,isSel?0.95:0.55);ctx.lineWidth=Math.max(1,a1.sc*c.zm*0.035);ctx.stroke();
           }
