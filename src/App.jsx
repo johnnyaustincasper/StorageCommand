@@ -1,6 +1,4 @@
-import { Suspense, lazy, useState, useRef, useEffect, useCallback, useMemo } from "react";
-
-const FacilityBuilder = lazy(() => import("./FacilityBuilder"));
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 function useViewport(){
   const getWidth=()=>typeof window==="undefined"?1280:window.innerWidth;
@@ -125,20 +123,6 @@ function normalizeUnits(units,fallback=ALL_UNITS){
   const hasBuilderUnits=units.some((unit)=>typeof unit?.x!=="number"||typeof unit?.z!=="number");
   const placeBuilderUnit=hasBuilderUnits?createLayoutScaler(units):null;
   return units.map((unit,index)=>normalizeAppUnit(unit,index,placeBuilderUnit));
-}
-
-function toBuilderUnits(units){
-  return normalizeUnits(units,[]).map((unit,index)=>({
-    id:unit.id,
-    label:unit.builderLabel || unit.id || `Unit ${index+1}`,
-    size:unit.label || "10×10",
-    price:String(unit.price ?? ""),
-    status:unit.status || "available",
-    center:Array.isArray(unit.sourceCenter)&&unit.sourceCenter.length===2
-      ? unit.sourceCenter
-      : [-95.9928 + unit.x * 0.00008, 36.154 - unit.z * 0.00012],
-    geometry:unit.geometry || null,
-  }));
 }
 
 function genUnits(){
@@ -934,12 +918,6 @@ export default function App(){
     if(typeof window!=="undefined")window.localStorage.setItem(STORAGE_KEYS.units,JSON.stringify(units));
   },[units]);
 
-  const openBuilder=()=>setMode("builder");
-  const saveBuilder=({units:nextUnits,address:nextAddress})=>{
-    setUnits(normalizeUnits(nextUnits));
-    setFacility(prev=>({...prev,address:(nextAddress||prev.address).trim()}));
-    setMode("setup");
-  };
   const resetDemo=()=>{
     setFacility(DEFAULT_FACILITY);
     setUnits(ALL_UNITS);
@@ -988,25 +966,6 @@ export default function App(){
     </div>
   );
 
-  // ── BUILDER ──
-  if(mode==="builder")return(
-    <div style={{width:"100%",height:"100vh",background:P.bg,fontFamily:P.fontBody}}>
-      {fonts}
-      <Suspense fallback={
-        <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:P.sub,fontSize:14}}>
-          Loading facility builder...
-        </div>
-      }>
-        <FacilityBuilder
-          existingUnits={toBuilderUnits(units)}
-          facilityAddress={facility.address}
-          onSave={saveBuilder}
-          onBack={()=>setMode("setup")}
-        />
-      </Suspense>
-    </div>
-  );
-
   // ── SETUP ──
   if(mode==="setup")return(
     <div style={{width:"100%",minHeight:"100vh",background:P.bg,fontFamily:P.fontBody,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1021,7 +980,6 @@ export default function App(){
       <div style={{flex:1,overflowY:"auto",padding:isTablet?"32px":"20px 16px"}}>
         <div style={{fontSize:24,fontWeight:700,color:P.text,fontFamily:P.font,marginBottom:16}}>Facility Administration</div>
         {[
-          {icon:"▦",title:"Facility Layout",desc:"Maintain the operating map, unit mix, row labels, pricing, and availability shown in command center views.",tag:"Operational",tagColor:P.gold,action:openBuilder,cta:"Open Layout Editor"},
           {icon:"◈",title:"Facility Profile",desc:"Address and facility identity are stored locally for this front-end prototype.",tag:"Local Config",tagColor:P.blue},
         ].map(({icon,title,desc,tag,tagColor,action,cta})=>(
           <button key={title} onClick={action} disabled={!action} style={{width:"100%",padding:16,borderRadius:P.radius,border:`1px solid ${action?tagColor+"35":P.border}`,background:P.card,marginBottom:10,cursor:action?"pointer":"default",display:"flex",gap:14,alignItems:"flex-start",textAlign:"left"}}>
@@ -1047,7 +1005,6 @@ export default function App(){
             <div><div style={{fontSize:18,fontWeight:700,color:P.text,fontFamily:P.font}}>${units.filter(u=>u.status!=="available"&&u.status!=="maintenance").reduce((s,u)=>s+Number(u.price||0),0).toLocaleString()}</div><div style={{fontSize:8,color:P.muted,fontFamily:P.fontBody}}>Monthly Rev</div></div>
           </div>
           <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
-            <button onClick={openBuilder} style={{padding:"10px 14px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${P.gold},#b8943f)`,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:P.fontBody}}>Open Facility Builder</button>
             <button onClick={resetDemo} style={{padding:"10px 14px",borderRadius:10,border:`1px solid ${P.border}`,background:P.card,color:P.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:P.fontBody}}>Reset Demo Data</button>
           </div>
         </div>
@@ -1160,7 +1117,6 @@ export default function App(){
                       </div>
                       <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:isTablet?"flex-end":"flex-start"}}>
                         <button onClick={()=>setFs(true)} style={{padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.20)",background:"rgba(255,255,255,.14)",color:"#fff",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,letterSpacing:".04em",textTransform:"uppercase",boxShadow:"0 10px 26px rgba(0,0,0,.10)"}}>Fullscreen Map</button>
-                        <button onClick={openBuilder} style={{padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"#fff",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:P.fontBody,letterSpacing:".04em",textTransform:"uppercase"}}>Edit Layout</button>
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(4,minmax(0,1fr))":"repeat(2,minmax(0,1fr))",gap:10,marginTop:18}}>
